@@ -80,21 +80,51 @@ export function useInput(): void {
       // Key repeat would machine-gun orbs off a held key.
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
       if (isTypingTarget(e.target)) return;
+      const store = useStore.getState();
 
+      // F9 works from anywhere, including from inside a hold — it is the way out.
+      if (e.code === 'F9') {
+        e.preventDefault();
+        store.togglePause();
+        return;
+      }
+
+      /* A held board takes no input but the two keys that release it. The guard
+         sits here so every branch below — orbs, casts, Space, Escape — is
+         covered once rather than each remembering to check. */
+      if (store.paused) {
+        if (e.code === 'Escape') {
+          e.preventDefault();
+          store.togglePause();
+        }
+        return;
+      }
+
+      // Escape unwinds one layer at a time, innermost first.
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        if (store.kbOpen || store.statsOpen) store.setPage(null);
+        else if (store.result) store.dismissResult();
+        else store.clearOrbs();
+        return;
+      }
+
+      const onPage = store.kbOpen || store.statsOpen;
       const action = byCode.get(e.code);
       if (action) {
         // Also stops Space/Enter from re-activating a focused button.
         e.preventDefault();
-        perform(action);
+        if (!onPage) perform(action);
         return;
       }
 
-      if (isControl(e.target)) return;
+      if (onPage || isControl(e.target)) return;
       if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
-        useStore.getState().toggleRun();
-      } else if (e.code === 'Escape') {
-        useStore.getState().clearOrbs();
+        // The results view is a finished run, so Space runs the next one rather
+        // than toggling a drill that has already ended.
+        if (store.result) store.start();
+        else store.toggleRun();
       }
     };
 
@@ -104,6 +134,8 @@ export function useInput(): void {
       const action = byCode.get(code);
       if (!action) return;
       e.preventDefault();
+      const store = useStore.getState();
+      if (store.paused || store.kbOpen || store.statsOpen) return;
       perform(action);
     };
 
@@ -113,13 +145,19 @@ export function useInput(): void {
       if (code && byCode.has(code)) e.preventDefault();
     };
 
+    const swallowContext = (e: MouseEvent) => {
+      if (byCode.has('Mouse3')) e.preventDefault();
+    };
+
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('mousedown', onMouseDown);
     window.addEventListener('auxclick', swallowAux);
+    window.addEventListener('contextmenu', swallowContext);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('auxclick', swallowAux);
+      window.removeEventListener('contextmenu', swallowContext);
     };
   }, [bindings, capturing]);
 }

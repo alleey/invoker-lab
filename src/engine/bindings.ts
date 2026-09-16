@@ -5,7 +5,7 @@
  *
  * Mouse buttons ride the same namespace as `Mouse3`/`Mouse4`/`Mouse5`.
  */
-import { ALL_ORBS, type Orb } from './spells';
+import { ALL_ORBS, ORB_INFO, type Orb } from './spells';
 
 export type Action = 'quas' | 'wex' | 'exort' | 'invoke' | 'slot1' | 'slot2';
 
@@ -16,9 +16,21 @@ export const ACTION_LABEL: Record<Action, string> = {
   wex: 'Wex',
   exort: 'Exort',
   invoke: 'Invoke',
-  slot1: 'Cast slot 1',
-  slot2: 'Cast slot 2',
+  slot1: 'Slot 1',
+  slot2: 'Slot 2',
 };
+
+/** What an action is drawn in: its reagent, gold for invoke, bone for a slot. */
+export const ACTION_HEX: Record<Action, string> = {
+  quas: ORB_INFO.quas.hex,
+  wex: ORB_INFO.wex.hex,
+  exort: ORB_INFO.exort.hex,
+  invoke: '#ffd76a',
+  slot1: '#ebe1cc',
+  slot2: '#ebe1cc',
+};
+
+export const isOrbAction = (a: Action): a is Orb => a === 'quas' || a === 'wex' || a === 'exort';
 
 export type Bindings = Record<Action, string>;
 

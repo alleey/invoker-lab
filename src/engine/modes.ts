@@ -16,6 +16,9 @@ export interface ModeExample {
   wasteful: { orbs: readonly Orb[]; note: string };
 }
 
+/** What a mode's score actually is. Professional is scored on its routing. */
+export type ScoreBy = 'casts' | 'streak' | 'efficiency';
+
 export interface Mode {
   id: ModeId;
   label: string;
@@ -37,7 +40,11 @@ export interface Mode {
   defaultDuration: number;
   /** Time added per landed spell, so a good run extends itself. */
   bonusMs: number;
-  /** Judge every cast efficient or not, and report the share. */
+  /**
+   * Judge each challenge against its shortest possible route and report the
+   * share. True everywhere a target is handed out — routing is the skill, and
+   * it is worth knowing in a streak drill as much as in Professional.
+   */
   trackEfficiency: boolean;
   /**
    * Seconds-per-spell shot clock. Empty means a spell waits for you forever.
@@ -47,8 +54,8 @@ export interface Mode {
   defaultSpellTimeout: number;
   /** Move on after a failure instead of making you fix it. */
   advanceOnMiss: boolean;
-  /** Headline the longest streak rather than the raw count. */
-  scoreByStreak: boolean;
+  /** Which of the run's numbers is the headline on the results page. */
+  scoreBy: ScoreBy;
   example?: ModeExample;
 }
 
@@ -71,11 +78,11 @@ export const MODES: Record<ModeId, Mode> = {
     durationOptions: CLOCKS,
     defaultDuration: 60_000,
     bonusMs: 2_000,
-    trackEfficiency: false,
+    trackEfficiency: true,
     spellTimeoutOptions: [],
     defaultSpellTimeout: 0,
     advanceOnMiss: false,
-    scoreByStreak: false,
+    scoreBy: 'casts',
   },
   combo: {
     id: 'combo',
@@ -94,11 +101,11 @@ export const MODES: Record<ModeId, Mode> = {
     durationOptions: CLOCKS,
     defaultDuration: 60_000,
     bonusMs: 2_000,
-    trackEfficiency: false,
+    trackEfficiency: true,
     spellTimeoutOptions: [],
     defaultSpellTimeout: 0,
     advanceOnMiss: false,
-    scoreByStreak: false,
+    scoreBy: 'casts',
   },
   efficient: {
     id: 'efficient',
@@ -121,7 +128,7 @@ export const MODES: Record<ModeId, Mode> = {
     spellTimeoutOptions: [],
     defaultSpellTimeout: 0,
     advanceOnMiss: false,
-    scoreByStreak: false,
+    scoreBy: 'efficiency',
     example: {
       setup: 'You have just cast Chaos Meteor, so you are still holding Wex, Exort, Exort.',
       ask: 'Next in the chain is Sun Strike — three Exort.',
@@ -151,11 +158,11 @@ export const MODES: Record<ModeId, Mode> = {
     durationOptions: CLOCKS,
     defaultDuration: 60_000,
     bonusMs: 0,
-    trackEfficiency: false,
+    trackEfficiency: true,
     spellTimeoutOptions: [1_000, 2_000, 3_000],
     defaultSpellTimeout: 2_000,
     advanceOnMiss: true,
-    scoreByStreak: true,
+    scoreBy: 'streak',
   },
   practice: {
     id: 'practice',
@@ -177,7 +184,7 @@ export const MODES: Record<ModeId, Mode> = {
     spellTimeoutOptions: [],
     defaultSpellTimeout: 0,
     advanceOnMiss: false,
-    scoreByStreak: false,
+    scoreBy: 'casts',
   },
 };
 

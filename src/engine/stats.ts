@@ -13,7 +13,16 @@ export interface SpellStat {
   efficient: number;
   /** Casts that were judged either way, and so the denominator for efficiency. */
   judged: number;
+  /**
+   * The last dozen landed times, newest last. A mean tells you where you are;
+   * only the sequence tells you which way you are going, which is what the
+   * star page's sparkline is for. Capped so the record cannot grow forever.
+   */
+  recent: number[];
 }
+
+/** How many times the star page's sparkline plots. */
+export const RECENT_CAP = 12;
 
 export type SpellStats = Record<string, SpellStat>;
 
@@ -26,7 +35,12 @@ export interface Stats {
    *  Efficiency belongs to a chain, not a spell — see engine/planner.ts. */
   chains: number;
   chainsOptimal: number;
+  /** Score of each finished drill, per mode, newest last. Drives the run history. */
+  logs: Record<string, number[]>;
 }
+
+/** How many past drills the results view charts. */
+export const LOG_CAP = 14;
 
 export const EMPTY_SPELL_STAT: SpellStat = {
   hits: 0,
@@ -35,12 +49,30 @@ export const EMPTY_SPELL_STAT: SpellStat = {
   bestMs: 0,
   efficient: 0,
   judged: 0,
+  recent: [],
 };
 
-export const EMPTY_STATS: Stats = { spells: {}, modes: {}, drills: 0, chains: 0, chainsOptimal: 0 };
+export const EMPTY_STATS: Stats = {
+  spells: {},
+  modes: {},
+  drills: 0,
+  chains: 0,
+  chainsOptimal: 0,
+  logs: {},
+};
+
+/**
+ * Merged against the empty record rather than returned raw: stored history
+ * predates some of these fields, so a table read straight off disk can be
+ * missing any of them.
+ */
+export function statIn(spells: SpellStats, spellId: string): SpellStat {
+  const stored = spells[spellId];
+  return stored ? { ...EMPTY_SPELL_STAT, ...stored } : EMPTY_SPELL_STAT;
+}
 
 export function statFor(stats: Stats, spellId: string): SpellStat {
-  return stats.spells[spellId] ?? EMPTY_SPELL_STAT;
+  return statIn(stats.spells, spellId);
 }
 
 export interface CastOutcome {
@@ -62,6 +94,7 @@ export function foldCast(spells: SpellStats, spellId: string, outcome: CastOutco
     next.hits += 1;
     next.totalMs += ms;
     next.bestMs = next.bestMs === 0 ? ms : Math.min(next.bestMs, ms);
+    next.recent = [...next.recent, ms].slice(-RECENT_CAP);
     if (outcome.efficient !== null && outcome.efficient !== undefined) {
       next.judged += 1;
       if (outcome.efficient) next.efficient += 1;

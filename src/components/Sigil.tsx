@@ -1,16 +1,16 @@
+import { type CSSProperties } from 'react';
+import { dark } from '../engine/format';
 import { ORB_INFO, type Orb } from '../engine/spells';
 
-interface Props {
-  orbs: readonly Orb[];
-  size?: 'sm' | 'lg';
-}
-
-/** The three reagent dots that stand in for a spell's name. */
-export function Sigil({ orbs, size = 'sm' }: Props): JSX.Element {
+/**
+ * A spell's three reagents as coloured beads, in the order it lists them.
+ * Small enough to sit inline in a sentence, which is where it usually is.
+ */
+export function Sigil({ orbs }: { orbs: readonly Orb[] }): JSX.Element {
   return (
-    <span className={`sigil ${size === 'lg' ? 'sigil-lg' : ''}`}>
-      {orbs.map((orb, i) => (
-        <i key={i} style={{ color: ORB_INFO[orb].hex }} />
+    <span className="sg">
+      {orbs.map((o, i) => (
+        <i key={i} style={{ '--c': ORB_INFO[o].hex, '--cd': dark(ORB_INFO[o].hex) } as CSSProperties} />
       ))}
     </span>
   );

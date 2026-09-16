@@ -12,11 +12,25 @@ interface Props {
  * built-in glyph tinted by the reagent the spell leans on (gold when it leans
  * on none). One component so every list, slot and chip stays consistent as the
  * icon folder fills up.
+ *
+ * Deliberately not `loading="lazy"`: most of these appear inside overlays that
+ * are display:none until opened, and a lazy image inside a hidden parent never
+ * starts loading — the stats table opened to ten empty squares.
  */
-export function SpellIcon({ spell, size = 21 }: Props): JSX.Element {
+export function SpellIcon({ spell, size = 28 }: Props): JSX.Element {
   const src = spellIcon(spell);
   if (src) {
-    return <img className="spell-img" src={src} alt="" width={size} height={size} loading="lazy" />;
+    return (
+      <img
+        className="sicon"
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        style={{ width: size, height: size }}
+        decoding="async"
+      />
+    );
   }
   const orb = dominantOrb(spell.orbs);
   return (

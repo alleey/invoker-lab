@@ -8,8 +8,8 @@ import {
   type Bindings,
 } from './engine/bindings';
 import { drawCombo } from './engine/combos';
-import { isTimed, MODE_ORDER, MODES, type ModeId } from './engine/modes';
-import { minOrbPresses, pushOrb, spellFor } from './engine/orbs';
+import { isTimed, MODE_ORDER, MODES, type ModeId, type ScoreBy } from './engine/modes';
+import { pushOrb, spellFor } from './engine/orbs';
 import { optimalChainCost } from './engine/planner';
 import { EMPTY_SLOTS, invokeInto, parFor, type Par, type SlotIndex, type Slots } from './engine/slots';
 import { dominantOrb, ORB_INFO, type Orb, type Spell } from './engine/spells';
@@ -17,6 +17,7 @@ import {
   creditChain,
   EMPTY_STATS,
   foldCast,
+  LOG_CAP,
   weakestSpells,
   type CastOutcome,
   type SpellStats,
@@ -61,7 +62,7 @@ export interface Verdict {
 export interface DrillResult {
   /** The number this mode is actually judged on. */
   score: number;
-  scoresByStreak: boolean;
+  scoreBy: ScoreBy;
   hits: number;
   misses: number;
   combos: number;
@@ -74,6 +75,29 @@ export interface DrillResult {
   isRecord: boolean;
   tracksEfficiency: boolean;
 }
+
+/** One cast, kept so the results view can show what happened spell by spell. */
+export interface CastLog {
+  id: string;
+  ok: boolean;
+  ms: number;
+}
+
+/** A finished run, retained so its breakdown outlives the run itself. */
+export interface LastRun {
+  mode: ModeId;
+  casts: CastLog[];
+  score: number;
+  hits: number;
+  misses: number;
+  bestStreak: number;
+  avgMs: number | null;
+  optimalChains: number;
+  judgedChains: number;
+}
+
+/** How many times a single run may be held. */
+export const PAUSE_MAX = 3;
 
 /** One-shot celebration cue. `id` changes so the same kind can fire twice running. */
 export interface Celebration {
@@ -129,6 +153,20 @@ if (typeof window !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) flushStats();
   });
+}
+
+/**
+ * Professional used to score the number of spells landed and now scores the
+ * share of chains routed perfectly, so any record stored under the old meaning
+ * is a count pretending to be a percentage. Drop that one number and leave the
+ * rest of a player's history alone — bumping the storage key would throw away
+ * every spell's lifetime record to fix a single field.
+ */
+function migrateStats(stats: Stats): Stats {
+  if (!('efficient' in stats.modes)) return stats;
+  const modes = { ...stats.modes };
+  delete modes.efficient;
+  return { ...stats, modes };
 }
 
 function spellHex(spell: Spell): string {
@@ -200,6 +238,23 @@ interface State {
   shake: number;
   flash: { action: Action; id: number } | null;
 
+  /* ── surfaces the constellation UI owns ── */
+  /** The star under the cursor, which drives the detail card. */
+  hovered: Spell | null;
+  kbOpen: boolean;
+  statsOpen: boolean;
+  /** Held drills stop every clock; the count to resume runs on its own timer. */
+  paused: boolean;
+  pausedAt: number;
+  resumeUntil: number;
+  pausesLeft: number;
+  casts: CastLog[];
+  lastRun: LastRun | null;
+
+  setHovered(spell: Spell | null): void;
+  setPage(page: 'keyboard' | 'stats' | null): void;
+  togglePause(): void;
+  endPause(now: number): void;
   setMode(mode: ModeId): void;
   setLength(mode: ModeId, value: number): void;
   setSpellTimeout(mode: ModeId, value: number): void;
@@ -207,6 +262,8 @@ interface State {
   spellTimedOut(): void;
   start(): void;
   finish(): void;
+  /** Close the results without clearing `lastRun` — the stats page still wants it. */
+  dismissResult(): void;
   toggleRun(): void;
   castOrb(orb: Orb): void;
   invoke(): void;
@@ -215,6 +272,7 @@ interface State {
   markFlash(action: Action): void;
   beginCapture(action: Action): void;
   cancelCapture(): void;
+  bindKey(action: Action, code: string): void;
   commitCapture(code: string): void;
   applyPreset(id: string): void;
   resetStats(): void;
@@ -306,13 +364,71 @@ export const useStore = create<State>()((set, get) => {
 
     verdict: IDLE,
     result: null,
-    stats: readJSON<Stats>(STATS_KEY, EMPTY_STATS),
+    stats: migrateStats(readJSON<Stats>(STATS_KEY, EMPTY_STATS)),
     sessionSpells: {},
     sessionMode: null,
 
     celebration: null,
     shake: 0,
     flash: null,
+
+    hovered: null,
+    kbOpen: false,
+    statsOpen: false,
+    paused: false,
+    pausedAt: 0,
+    resumeUntil: 0,
+    pausesLeft: PAUSE_MAX,
+    casts: [],
+    lastRun: null,
+
+    setHovered(spell) {
+      if (get().hovered?.id !== spell?.id) set({ hovered: spell });
+    },
+
+    /** Only one full-screen surface at a time, so they cannot stack. */
+    setPage(page) {
+      set({ kbOpen: page === 'keyboard', statsOpen: page === 'stats' });
+    },
+
+    /**
+     * F9 holds the drill. The first press freezes, the second starts the count;
+     * the board is hidden rather than frozen-and-readable, so a pause buys time
+     * away rather than time to plan.
+     */
+    togglePause() {
+      const s = get();
+      if (!s.running || s.result) return;
+      if (!s.paused) {
+        if (s.pausesLeft <= 0) {
+          set({ verdict: { text: 'No pauses left this run.', tone: 'bad' } });
+          return;
+        }
+        set({ paused: true, pausedAt: performance.now(), resumeUntil: 0, pausesLeft: s.pausesLeft - 1 });
+      } else if (!s.resumeUntil) {
+        set({ resumeUntil: performance.now() + 3000 });
+      }
+    },
+
+    /**
+     * Every clock here is an absolute timestamp, so resuming pushes them all
+     * forward by however long we were held, the countdown included. `shownAt` is
+     * in that list on purpose: leave it behind and the pause is recorded as
+     * reaction time, which would poison that spell's average permanently.
+     */
+    endPause(at) {
+      const s = get();
+      if (!s.paused) return;
+      const delta = at - s.pausedAt;
+      set({
+        endsAt: s.endsAt ? s.endsAt + delta : 0,
+        spellEndsAt: s.spellEndsAt ? s.spellEndsAt + delta : 0,
+        shownAt: s.shownAt ? s.shownAt + delta : 0,
+        paused: false,
+        pausedAt: 0,
+        resumeUntil: 0,
+      });
+    },
 
     setMode(mode) {
       set({
@@ -385,6 +501,11 @@ export const useStore = create<State>()((set, get) => {
         runDurationMs: timed ? chosen : 0,
         sessionSpells: {},
         sessionMode: s.mode,
+        casts: [],
+        paused: false,
+        pausedAt: 0,
+        resumeUntil: 0,
+        pausesLeft: PAUSE_MAX,
         verdict: IDLE,
         celebration: null,
         ...beginChain(drawCombo(config.comboSizes, null, pool), [], EMPTY_SLOTS, timeoutMs),
@@ -407,6 +528,7 @@ export const useStore = create<State>()((set, get) => {
       set({
         stats,
         sessionSpells: foldCast(s.sessionSpells, target.id, missed),
+        casts: [...s.casts, { id: target.id, ok: false, ms: s.spellTimeoutMs }],
         misses: s.misses + 1,
         streak: 0,
         shake: s.shake + 1,
@@ -421,14 +543,23 @@ export const useStore = create<State>()((set, get) => {
       const config = MODES[s.mode];
       const avgMs = s.hits > 0 ? s.timeTotal / s.hits : null;
       const previousBest = s.stats.modes[s.mode] ?? 0;
-      // Rapid Fire lives or dies on the unbroken run, so that is what it records.
-      const score = config.scoreByStreak ? s.bestStreak : s.hits;
+      /* Each mode keeps the number it is actually about: Rapid Fire lives or
+         dies on the unbroken run, Professional on how it routed, everything
+         else on how much it landed. Comparing a run against its own mode's
+         record only means something if they measure the same thing. */
+      const efficiencyPct = s.judgedChains ? Math.round((s.optimalChains / s.judgedChains) * 100) : 0;
+      const score =
+        config.scoreBy === 'streak' ? s.bestStreak : config.scoreBy === 'efficiency' ? efficiencyPct : s.hits;
       const isRecord = score > previousBest;
 
       const stats: Stats = {
         ...s.stats,
         drills: s.stats.drills + 1,
         modes: isRecord ? { ...s.stats.modes, [s.mode]: score } : s.stats.modes,
+        logs: {
+          ...s.stats.logs,
+          [s.mode]: [...(s.stats.logs[s.mode] ?? []), score].slice(-LOG_CAP),
+        },
       };
       pendingStats = stats;
       flushStats();
@@ -441,9 +572,24 @@ export const useStore = create<State>()((set, get) => {
         spellEndsAt: 0,
         stats,
         celebration: null,
+        paused: false,
+        resumeUntil: 0,
+        /* Kept whole so the results view and the stats page can show that run
+           after it has ended, without the live counters having to survive. */
+        lastRun: {
+          mode: s.mode,
+          casts: [...s.casts],
+          score,
+          hits: s.hits,
+          misses: s.misses,
+          bestStreak: s.bestStreak,
+          avgMs,
+          optimalChains: s.optimalChains,
+          judgedChains: s.judgedChains,
+        },
         result: {
           score,
-          scoresByStreak: config.scoreByStreak,
+          scoreBy: config.scoreBy,
           hits: s.hits,
           misses: s.misses,
           combos: s.combos,
@@ -456,6 +602,10 @@ export const useStore = create<State>()((set, get) => {
           tracksEfficiency: config.trackEfficiency,
         },
       });
+    },
+
+    dismissResult() {
+      set({ result: null, verdict: IDLE });
     },
 
     toggleRun() {
@@ -523,6 +673,7 @@ export const useStore = create<State>()((set, get) => {
         const penalty = {
           stats,
           sessionSpells: foldCast(s.sessionSpells, target.id, missed),
+          casts: [...s.casts, { id: target.id, ok: false, ms: performance.now() - s.shownAt }],
           presses,
           misses: s.misses + 1,
           streak: 0,
@@ -563,6 +714,7 @@ export const useStore = create<State>()((set, get) => {
       let sessionSpells = foldCast(s.sessionSpells, target.id, landed);
 
       const base = {
+        casts: [...s.casts, { id: target.id, ok: true, ms }],
         hits: s.hits + 1,
         streak,
         bestStreak: Math.max(s.bestStreak, streak),
@@ -598,12 +750,24 @@ export const useStore = create<State>()((set, get) => {
           chainsOptimal: s.stats.chainsOptimal + (optimal ? 1 : 0),
         };
         sessionSpells = creditChain(sessionSpells, ids, optimal);
-        verdict = optimal
-          ? { text: `Chain routed in ${chainPresses} keys — the shortest there is.`, tone: 'good' }
-          : {
-              text: `Chain took ${chainPresses} keys against ${s.chainPar} — ${wasted} wasted.`,
-              tone: 'bad',
-            };
+        // A chain is judged as a chain; a lone spell is still judged, but it
+        // reads as a cast with a note rather than as a route.
+        const time = `${(ms / 1000).toFixed(2)}s`;
+        if (optimal) {
+          verdict = {
+            text: isChain
+              ? `Chain routed in ${chainPresses} keys — the shortest there is.`
+              : `${target.name} — ${time}, at par.`,
+            tone: 'good',
+          };
+        } else {
+          verdict = {
+            text: isChain
+              ? `Chain took ${chainPresses} keys against ${s.chainPar} — ${wasted} wasted.`
+              : `${target.name} — ${time}, but ${chainPresses} keys against ${s.chainPar}.`,
+            tone: 'bad',
+          };
+        }
       } else {
         verdict = { text: `${target.name} — ${(ms / 1000).toFixed(2)}s`, tone: 'good' };
       }
@@ -648,12 +812,17 @@ export const useStore = create<State>()((set, get) => {
       set({ capturing: null });
     },
 
+    /** The drag-and-drop route, which never arms a capture in the first place. */
+    bindKey(action, code) {
+      const bindings = rebind(get().bindings, action, code);
+      writeJSON(BINDINGS_KEY, bindings);
+      set({ bindings, presetId: matchesPreset(bindings), capturing: null });
+    },
+
     commitCapture(code) {
       const s = get();
       if (!s.capturing) return;
-      const bindings = rebind(s.bindings, s.capturing, code);
-      writeJSON(BINDINGS_KEY, bindings);
-      set({ bindings, presetId: matchesPreset(bindings), capturing: null });
+      s.bindKey(s.capturing, code);
     },
 
     applyPreset(id) {
@@ -670,8 +839,3 @@ export const useStore = create<State>()((set, get) => {
     },
   };
 });
-
-/** Exposed for the Grimoire's "what would this cost right now" column. */
-export function orbCostFrom(orbs: readonly Orb[], target: readonly Orb[]): number {
-  return minOrbPresses(orbs, target);
-}
