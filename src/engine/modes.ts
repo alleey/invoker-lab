@@ -109,7 +109,7 @@ export const MODES: Record<ModeId, Mode> = {
   },
   efficient: {
     id: 'efficient',
-    label: 'Professional',
+    label: 'PRO',
     goal: 'Route a whole combination in the fewest keys it can possibly take.',
     steps: [
       'The same chains as Combos, drawn the same way.',
@@ -166,15 +166,15 @@ export const MODES: Record<ModeId, Mode> = {
   },
   practice: {
     id: 'practice',
-    label: 'Practice',
-    goal: 'Get a feel for how the orb queue moves, with nothing on the line.',
+    label: 'Free casting',
+    goal: 'Cast anything you like, with nothing on the line.',
     steps: [
       'Stack any three reagents. A fourth pushes the oldest one out.',
       'Invoke to see what they make.',
       'Cast from either slot.',
     ],
     scoring: 'Nothing is scored and nothing is recorded here.',
-    ends: 'Never. Switch modes when you are done.',
+    ends: 'Never. Press Done when you have had enough.',
     reveal: 'none',
     comboSizes: [],
     durationOptions: [],
@@ -191,7 +191,14 @@ export const MODES: Record<ModeId, Mode> = {
 /**
  * Ordered by what each one asks of you: learn the spells, chain them, do it
  * under a clock, then do it by the shortest possible route.
+ *
+ * `practice` is deliberately absent. It is not a fifth way to play — it is the
+ * free-casting sandbox, reachable from inside any mode, and listing it beside
+ * the four drills said the opposite.
  */
-export const MODE_ORDER: readonly ModeId[] = ['rapid', 'combo', 'crucible', 'efficient', 'practice'];
+export const MODE_ORDER: readonly ModeId[] = ['rapid', 'combo', 'crucible', 'efficient'];
+
+/** The sandbox's copy. Not a mode you can select — see MODE_ORDER. */
+export const PRACTICE = MODES.practice;
 
 export const isTimed = (mode: Mode): boolean => mode.durationOptions.length > 0;

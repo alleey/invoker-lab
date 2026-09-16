@@ -1,7 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { bars, clamp, mmss, rgba } from '../engine/bars';
 import { EDGES, geom, markerTarget, NODES, nodeOf, type Geo, type Pt } from '../engine/constellation';
-import { MODES } from '../engine/modes';
 import { optimalRoute } from '../engine/orbs';
 import { dominantOrb, ORB_INFO, type Orb, type Spell } from '../engine/spells';
 import { accuracy, attempts, statFor } from '../engine/stats';
@@ -56,6 +55,22 @@ const hexFor = (sp: Spell): string => {
 };
 
 /**
+ * What the chart is for at this moment.
+ *
+ * `drill` is the board you play on; `run` and `life` are the same mastery read
+ * differing only in what they count; `idle` is the backdrop behind a brief.
+ */
+type View = 'idle' | 'drill' | 'run' | 'life';
+
+function viewFor(s: ReturnType<typeof useStore.getState>): View {
+  if (s.masteryOpen) return 'life';
+  if (s.result) return 'run';
+  if (s.statsOpen) return s.lastRun ? 'run' : 'life';
+  if (s.running || s.practicing) return 'drill';
+  return 'idle';
+}
+
+/**
  * The star chart, and the frame everything else hangs off.
  *
  * Every panel in the app is positioned against `#stage`, so the shell is passed
@@ -69,6 +84,7 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
   // The chart fades behind a page rather than vanishing: it is the thing you
   // came back to, and a black rectangle loses your place in it.
   const dimmed = useStore((s) => (s.kbOpen ? 'dim' : s.statsOpen ? 'dim2' : ''));
+  // masteryOpen deliberately dims nothing: there, the chart is the page.
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -173,12 +189,14 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
       if (!geo) return;
       const S = useStore.getState();
       const { R, at } = geo;
-      const untargeted = MODES[S.mode].comboSizes.length === 0;
-      const target = S.running && !untargeted ? S.combo[S.step] : null;
-      const res = !!S.result || S.statsOpen;
+      const view = viewFor(S);
+      const target = view === 'drill' && S.running ? S.combo[S.step] : null;
+      /* Mastery and results read the same chart: rings become accuracy, the
+         marker and the route go away. They differ only in what they count. */
+      const scored = view === 'run' || view === 'life';
 
       // lattice
-      ctx.strokeStyle = 'rgba(184,147,74,.24)';
+      ctx.strokeStyle = view === 'idle' ? 'rgba(184,147,74,.1)' : 'rgba(184,147,74,.24)';
       ctx.lineWidth = 1;
       ctx.setLineDash([]);
       ctx.beginPath();
@@ -189,6 +207,20 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
         ctx.lineTo(q[0], q[1]);
       }
       ctx.stroke();
+
+      /* Idle is the brief's backdrop, not the board. The stars are there, unlit
+         and unlabelled, so Begin lights up something already in place rather
+         than dropping a new screen on top of you. */
+      if (view === 'idle') {
+        ctx.fillStyle = 'rgba(235,225,204,.22)';
+        for (const nd of NODES) {
+          const p = at(nd.q, nd.w, nd.e);
+          ctx.beginPath();
+          ctx.arc(p[0], p[1], 2.2 * NS, 0, 7);
+          ctx.fill();
+        }
+        return;
+      }
 
       // the marker eases toward where the held reagents put you
       const tp = markerTarget(geo, S.orbs);
@@ -229,7 +261,7 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
 
       // per-spell tallies for the run being reviewed
       const per: Record<string, { h: number; m: number }> = {};
-      if (res) {
+      if (view === 'run') {
         for (const x of S.lastRun ? S.lastRun.casts : S.casts) {
           const p = per[x.id] ?? (per[x.id] = { h: 0, m: 0 });
           if (x.ok) p.h++;
@@ -239,7 +271,7 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
 
       /* The chain, traced across the map in cast order: legs already cast go
          solid, the rest stay dashed, and each spell carries its position. */
-      if (S.running && S.combo.length > 1 && !res) {
+      if (view === 'drill' && S.running && S.combo.length > 1) {
         const pts = S.combo.map((sp) => {
           const n = nodeOf(sp.id);
           return n ? at(n.q, n.w, n.e) : null;
@@ -292,14 +324,17 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
         const p = at(nd.q, nd.w, nd.e);
         const sp = nd.spell;
         const isT = !!target && sp.id === target.id;
-        const isH = S.hovered?.id === sp.id && !res && !S.paused;
+        // No mastery on hover mid-drill: it is a distraction dressed as help,
+        // and the one number that matters right then is the shot clock.
+        const isH = S.hovered?.id === sp.id && !S.running && !S.paused;
         const hex = hexFor(sp);
         const li = S.slots.findIndex((x) => x && x.id === sp.id);
         const cost = li >= 0 ? 0 : optimalRoute(S.orbs, sp.orbs).length;
         const lifeStat = statFor(S.stats, sp.id);
         const runRec = per[sp.id];
-        const a = res && runRec ? runRec.h / (runRec.h + runRec.m) : res ? null : accuracy(lifeStat);
-        const att = res && runRec ? runRec.h + runRec.m : attempts(lifeStat);
+        const a =
+          view === 'run' ? (runRec ? runRec.h / (runRec.h + runRec.m) : null) : accuracy(lifeStat);
+        const att = view === 'run' ? (runRec ? runRec.h + runRec.m : 0) : attempts(lifeStat);
 
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = isT || isH ? 0.85 : 0.4;
@@ -378,26 +413,26 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
 
         const subY = p[1] + (wrap ? L2 : L1) + 14;
         ctx.font = '400 11px "IBM Plex Mono", monospace';
-        if (res) {
+        if (scored) {
           ctx.fillStyle =
             a === null ? 'rgba(97,90,77,.9)' : a >= 0.9 ? 'rgba(90,209,255,.85)' : a >= 0.7 ? 'rgba(255,215,106,.85)' : 'rgba(255,92,106,.9)';
-          ctx.fillText(a === null ? 'not drawn' : `${Math.round(a * 100)}% · ${att}`, p[0], subY);
+          const blank = view === 'run' ? 'not drawn' : 'never cast';
+          ctx.fillText(a === null ? blank : `${Math.round(a * 100)}% · ${att}`, p[0], subY);
         } else {
           ctx.fillStyle = li >= 0 ? '#ffd76a' : 'rgba(138,130,114,.9)';
           ctx.fillText(li >= 0 ? `slot ${li + 1}` : cost === 0 ? 'in hand' : `${cost} key${cost > 1 ? 's' : ''}`, p[0], subY);
         }
       }
 
-      if (!res) {
+      if (!scored) {
         // cast flourish: one ring per reagent, in the spell's own colours
         const cel = S.celebration;
         if (cel) {
           const age = t - cel.id;
           if (age >= 0 && age < CELEB_MS) {
             const q = Math.min(age / CELEB_MS, 1);
-            const last = S.casts.length ? S.casts[S.casts.length - 1] : null;
-            const sp = last ? NODES.find((n) => n.spell.id === last.id)?.spell : null;
-            const nd = sp ? nodeOf(sp.id) : null;
+            const nd = nodeOf(cel.spellId);
+            const sp = nd?.spell ?? null;
             const p: Pt = nd ? at(nd.q, nd.w, nd.e) : [mx, my];
             ctx.globalCompositeOperation = 'lighter';
             ctx.globalAlpha = (1 - q) * 0.6;
@@ -497,10 +532,17 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
       raf = requestAnimationFrame(tick);
     };
 
-    // hover: nearest node within reach of the cursor
+    /* Hover: nearest node within reach of the cursor.
+       Only where a star page is welcome — the mastery chart and the sandbox.
+       Mid-drill it is suppressed outright rather than merely hidden, so the
+       node under a resting cursor does not light up either. */
     const onMove = (e: PointerEvent) => {
       const S = useStore.getState();
-      if (!geo || S.result || S.kbOpen || S.statsOpen || S.paused) return;
+      const welcome = S.masteryOpen || (S.practicing && !S.kbOpen && !S.statsOpen);
+      if (!geo || S.paused || !welcome) {
+        if (S.hovered) S.setHovered(null);
+        return;
+      }
       const r = stage.getBoundingClientRect();
       const x = e.clientX - r.left;
       const y = e.clientY - r.top;

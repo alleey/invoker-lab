@@ -4,7 +4,10 @@ import { CrashNotice } from './components/CrashNotice';
 import { HoverCard } from './components/HoverCard';
 import { KeyboardPage } from './components/KeyboardPage';
 import { LeftRail } from './components/LeftRail';
+import { MasteryPage } from './components/MasteryPage';
+import { ModeBrief } from './components/ModeBrief';
 import { PausePage } from './components/PausePage';
+import { PracticeBar } from './components/PracticeBar';
 import { ResultsView } from './components/ResultsView';
 import { RightRail } from './components/RightRail';
 import { Stage } from './components/Stage';
@@ -21,13 +24,23 @@ import { useStore } from './store';
  * Everything lives inside the stage, absolutely positioned around the star
  * chart. Each panel decides for itself whether it is visible, because the rules
  * differ: the header survives the results view but not a full page, the altar
- * survives neither, and the chart is only ever dimmed.
+ * appears only once you have committed to a drill or the sandbox, and the chart
+ * is never hidden, only re-purposed.
  */
 export function App(): JSX.Element {
   useInput();
 
-  const onPage = useStore((s) => s.kbOpen || s.statsOpen);
-  const overlay = useStore((s) => s.kbOpen || s.statsOpen || !!s.result || s.paused);
+  /**
+   * The sandbox gets the header slot to itself.
+   *
+   * Its title and Done button are positioned exactly where the app title and
+   * the tiles are, so both drew on top of each other. Ceding the row is also
+   * the honest thing: casts, streak, accuracy and a session clock are all
+   * meaningless in free casting, and showing them implies otherwise.
+   */
+  const onPage = useStore((s) => s.kbOpen || s.statsOpen || s.masteryOpen);
+  const chrome = useStore((s) => !s.kbOpen && !s.statsOpen && !s.masteryOpen && !s.practicing);
+  const board = useStore((s) => (s.running || s.practicing) && !s.paused && !s.result);
   const [, bumpLayout] = useState(0);
 
   // Chromium can tell us the real cap legend; re-render once it answers.
@@ -48,17 +61,20 @@ export function App(): JSX.Element {
 
   return (
     <Stage>
-      {!onPage && <TopBar />}
+      {chrome && <TopBar />}
       <CrashNotice />
 
+      <ModeBrief />
+      <PracticeBar />
       <StageBar />
       <LeftRail />
       <HoverCard />
       <RightRail />
-      {!overlay && <Altar />}
+      {board && !onPage && <Altar />}
       <Verdict />
 
       {!onPage && <ResultsView />}
+      <MasteryPage />
       <StatsPage />
       <KeyboardPage />
       <PausePage />

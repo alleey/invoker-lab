@@ -14,12 +14,15 @@ const CAPS: { action: Action; hex: string; label: string }[] = [
 ];
 
 const SOCKETS = Array.from({ length: MAX_ORBS }, (_, i) => i);
-const CIRC = 2 * Math.PI * 24;
 
 /**
  * One four-column grid: each socket sits over its keycap, and the two slot
  * plates span two columns each. The columns are wider than the sockets need
  * because the plates have to fit a name like Deafening Blast.
+ *
+ * The top row holds the three reagents and nothing else. It once ended in an
+ * invoke charge ring, but a socket filling up already says how many reagents
+ * you hold, and the Invoke keycap below still invokes on click.
  */
 export function Altar(): JSX.Element {
   const orbs = useStore((s) => s.orbs);
@@ -31,8 +34,6 @@ export function Altar(): JSX.Element {
   const markFlash = useStore((s) => s.markFlash);
   const hot = useHotAction();
 
-  const ready = orbs.length === MAX_ORBS;
-
   const press = (a: Action) => {
     markFlash(a);
     if (a === 'invoke') invoke();
@@ -43,31 +44,19 @@ export function Altar(): JSX.Element {
 
   return (
     <section className="altar">
-      {SOCKETS.map((i) => {
-        const o = orbs[i];
-        return (
-          <span
-            key={i}
-            className={`socket${o ? ' f' : ''}`}
-            title={o ? ORB_INFO[o].name : 'Empty'}
-            style={o ? ({ '--c': ORB_INFO[o].hex, '--cd': dark(ORB_INFO[o].hex) } as CSSProperties) : undefined}
-          />
-        );
-      })}
-
-      <button
-        className={`inv${ready ? ' ready' : ''}`}
-        type="button"
-        aria-label="Invoke"
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => press('invoke')}
-      >
-        <svg viewBox="0 0 60 60" aria-hidden="true">
-          <circle className="tr" cx="30" cy="30" r="24" />
-          <circle className="ch" cx="30" cy="30" r="24" strokeDasharray={`${(orbs.length / MAX_ORBS) * CIRC} ${CIRC}`} />
-        </svg>
-        <b>{keyLabel(bindings.invoke)}</b>
-      </button>
+      <div className="sockets">
+        {SOCKETS.map((i) => {
+          const o = orbs[i];
+          return (
+            <span
+              key={i}
+              className={`socket${o ? ' f' : ''}`}
+              title={o ? ORB_INFO[o].name : 'Empty'}
+              style={o ? ({ '--c': ORB_INFO[o].hex, '--cd': dark(ORB_INFO[o].hex) } as CSSProperties) : undefined}
+            />
+          );
+        })}
+      </div>
 
       {([0, 1] as const).map((i) => {
         const sp = slots[i];

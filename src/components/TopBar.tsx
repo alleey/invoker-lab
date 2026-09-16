@@ -33,6 +33,20 @@ export function TopBar(): JSX.Element {
     };
   });
 
+  /*
+   * The loop writes this node behind React's back, so when a run ends React
+   * sees the same JSX it rendered before and leaves the DOM alone — the tile
+   * keeps showing whatever the final frame put there. Put the idle value back
+   * by hand, since nothing else can.
+   */
+  useEffect(() => {
+    if (running || !clockRef.current) return;
+    const c = MODES[mode];
+    clockRef.current.textContent = c.durationOptions.length
+      ? mmss(lengths[mode] || c.defaultDuration)
+      : '—';
+  }, [running, mode, lengths]);
+
   const c = MODES[mode];
   const chains = c.comboSizes.some((n) => n > 1);
   const avg = hits ? timeTotal / hits : null;
@@ -47,7 +61,7 @@ export function TopBar(): JSX.Element {
       <header className="top">
         <div className="title">
           <h1>Invoker Lab</h1>
-          <p>reagent star chart · every edge is one press</p>
+          <p>Arsenal Magus is hard to learn, harder still to master.</p>
         </div>
 
         <nav className="modes" aria-label="Practice mode">

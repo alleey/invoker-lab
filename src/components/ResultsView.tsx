@@ -1,5 +1,5 @@
 import { type CSSProperties } from 'react';
-import { sec, tier } from '../engine/format';
+import { mins, sec, tier } from '../engine/format';
 import { MODES } from '../engine/modes';
 import { SPELL_BY_ID, type Spell } from '../engine/spells';
 import { useStore, type CastLog } from '../store';
@@ -70,7 +70,7 @@ export function ResultsView(): JSX.Element {
       <div className="res-left">
         <p className="eb">
           Drill complete · {c.label}
-          {runDurationMs ? ` · ${runDurationMs / 1000}s` : ''}
+          {runDurationMs ? ` · ${mins(runDurationMs)}` : ''}
         </p>
         <div className="score">
           {result.score}

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "An Invoker reagent drill with rebindable keys and full orb-to-slot cast chain.",
+  "description": "Arsenal Magus is hard to learn, harder still to master.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

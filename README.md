@@ -1,7 +1,6 @@
 # Invoker Lab
 
-An Invoker reagent drill. Rebindable keys, the real orb FIFO, the real two-slot
-invoke model, and scoring against the cheapest possible keypress route.
+Arsenal Magus is hard to learn, harder still to master.
 
 ```bash
 npm install && npm run dev

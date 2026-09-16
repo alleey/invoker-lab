@@ -99,12 +99,22 @@ export interface LastRun {
 /** How many times a single run may be held. */
 export const PAUSE_MAX = 3;
 
+/** The full-screen surfaces. Only one is ever open, so they cannot stack. */
+export type Page = 'keyboard' | 'stats' | 'mastery' | null;
+
 /** One-shot celebration cue. `id` changes so the same kind can fire twice running. */
 export interface Celebration {
   id: number;
   kind: 'spell' | 'combo';
   text: string;
   hex: string;
+  /**
+   * What was cast. The flourish used to work this out from the last entry in
+   * the cast log, which the sandbox never writes to — so free casting drew no
+   * reagent rings at all, and after a drill it drew them over whichever spell
+   * had ended that run. An event should carry its own subject.
+   */
+  spellId: string;
 }
 
 function readJSON<T extends object>(key: string, fallback: T): T {
@@ -243,6 +253,13 @@ interface State {
   hovered: Spell | null;
   kbOpen: boolean;
   statsOpen: boolean;
+  masteryOpen: boolean;
+  /**
+   * The free-casting sandbox. Not a mode — you enter it from inside whichever
+   * mode you are in and come back to that same brief, because it teaches the
+   * orb queue rather than how any one drill is played.
+   */
+  practicing: boolean;
   /** Held drills stop every clock; the count to resume runs on its own timer. */
   paused: boolean;
   pausedAt: number;
@@ -252,7 +269,8 @@ interface State {
   lastRun: LastRun | null;
 
   setHovered(spell: Spell | null): void;
-  setPage(page: 'keyboard' | 'stats' | null): void;
+  setPage(page: Page): void;
+  setPracticing(on: boolean): void;
   togglePause(): void;
   endPause(now: number): void;
   setMode(mode: ModeId): void;
@@ -375,6 +393,8 @@ export const useStore = create<State>()((set, get) => {
     hovered: null,
     kbOpen: false,
     statsOpen: false,
+    masteryOpen: false,
+    practicing: false,
     paused: false,
     pausedAt: 0,
     resumeUntil: 0,
@@ -388,7 +408,21 @@ export const useStore = create<State>()((set, get) => {
 
     /** Only one full-screen surface at a time, so they cannot stack. */
     setPage(page) {
-      set({ kbOpen: page === 'keyboard', statsOpen: page === 'stats' });
+      set({
+        kbOpen: page === 'keyboard',
+        statsOpen: page === 'stats',
+        masteryOpen: page === 'mastery',
+        hovered: null,
+      });
+    },
+
+    /**
+     * Entering clears the board so the sandbox starts from nothing; leaving
+     * clears it again so the mode you return to cannot be begun with reagents
+     * already in hand.
+     */
+    setPracticing(on) {
+      set({ practicing: on, orbs: [], slots: EMPTY_SLOTS, verdict: IDLE, hovered: null });
     },
 
     /**
@@ -434,6 +468,7 @@ export const useStore = create<State>()((set, get) => {
       set({
         mode,
         running: false,
+        practicing: false,
         result: null,
         combo: [],
         step: 0,
@@ -484,6 +519,7 @@ export const useStore = create<State>()((set, get) => {
       const pool = drawPool(s.prefs.focusWeak, s.stats);
       set({
         running: true,
+        practicing: false,
         result: null,
         orbs: [],
         slots: EMPTY_SLOTS,
@@ -610,7 +646,8 @@ export const useStore = create<State>()((set, get) => {
 
     toggleRun() {
       const s = get();
-      if (MODES[s.mode].comboSizes.length === 0) return;
+      // The sandbox has nothing to start or stop; leave it first.
+      if (s.practicing) return;
       if (s.running) s.finish();
       else s.start();
     },
@@ -650,11 +687,11 @@ export const useStore = create<State>()((set, get) => {
       const chainPresses = s.running ? s.chainPresses + 1 : s.chainPresses;
       const config = MODES[s.mode];
 
-      // Practice and idle fiddling are never recorded.
-      if (!s.running || config.comboSizes.length === 0) {
+      // The sandbox is never recorded — that is the whole point of it.
+      if (!s.running) {
         set({
           presses,
-          celebration: { id: performance.now(), kind: 'spell', text: '', hex: spellHex(spell) },
+          celebration: { id: performance.now(), kind: 'spell', text: '', hex: spellHex(spell), spellId: spell.id },
           verdict: {
             text: `${spell.name} — ${spell.orbs.map((o) => ORB_INFO[o].name).join(' · ')}`,
             tone: 'good',
@@ -729,7 +766,7 @@ export const useStore = create<State>()((set, get) => {
           stats,
           sessionSpells,
           verdict: { text: `${target.name} — ${(ms / 1000).toFixed(2)}s`, tone: 'good' },
-          celebration: { id: performance.now(), kind: 'spell', text: '', hex: spellHex(target) },
+          celebration: { id: performance.now(), kind: 'spell', text: '', hex: spellHex(target), spellId: target.id },
           ...aim(s.combo, nextStep, s.orbs, s.slots, s.spellTimeoutMs),
         });
         return;
@@ -786,6 +823,7 @@ export const useStore = create<State>()((set, get) => {
           kind: isChain ? 'combo' : 'spell',
           text: isChain ? `${s.combo.length}-spell chain` : '',
           hex: spellHex(target),
+          spellId: target.id,
         },
         ...beginChain(
           drawCombo(config.comboSizes, target, s.pool),

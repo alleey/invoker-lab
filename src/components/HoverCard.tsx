@@ -42,14 +42,14 @@ function Spark({ times, avg }: { times: readonly number[]; avg: number }): JSX.E
  */
 export function HoverCard(): JSX.Element {
   const spell = useStore((s) => s.hovered);
-  const overlay = useStore((s) => s.kbOpen || s.statsOpen || !!s.result || s.paused);
+  // Welcome on the mastery chart and in the sandbox; never mid-drill.
+  const welcome = useStore((s) => (s.masteryOpen || s.practicing) && !s.paused && !s.kbOpen && !s.statsOpen);
   const orbs = useStore((s) => s.orbs);
   const slots = useStore((s) => s.slots);
   const bindings = useStore((s) => s.bindings);
   const stats = useStore((s) => s.stats);
 
-  const show = spell && !overlay;
-  if (!show) return <aside className="card" aria-hidden="true" />;
+  if (!spell || !welcome) return <aside className="card" aria-hidden="true" />;
 
   const stat = statFor(stats, spell.id);
   const acc = accuracy(stat);

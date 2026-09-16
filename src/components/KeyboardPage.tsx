@@ -191,11 +191,11 @@ export function KeyboardPage(): JSX.Element {
   return (
     <section className="kbpage on">
       <div className="kb-head">
-        <p className="eb">Bindings · key positions</p>
+        <p className="eb">Bindings</p>
         <h2>Drop a reagent on a key</h2>
         <p>
-          Or click one, then press the key you want. A key that already belongs to something swaps, so nothing is ever
-          left unbound. Mouse 3, 4 and 5 bind the same way.
+          Or click one, then press the key you want. Taking a key that is already in use swaps the two. Mouse 3, 4 and
+          5 work the same way.
         </p>
       </div>
       <button className="btn kb-done" type="button" onClick={() => useStore.getState().setPage(null)}>
@@ -323,10 +323,8 @@ export function KeyboardPage(): JSX.Element {
 
       <div className="kb-foot">
         <span>
-          <b>Positions, not letters.</b> A bind is the key's place on the board, so it survives a layout switch.
-        </span>
-        <span>
-          <b>Real legends.</b> Where the browser can tell us, caps show what is printed on your keyboard.
+          <b>Binds follow the key, not the letter.</b> Change your keyboard layout and your binds stay where your
+          fingers are.
         </span>
       </div>
 

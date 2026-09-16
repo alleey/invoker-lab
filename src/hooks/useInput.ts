@@ -100,21 +100,27 @@ export function useInput(): void {
         return;
       }
 
+      const onPage = store.kbOpen || store.statsOpen || store.masteryOpen;
+
       // Escape unwinds one layer at a time, innermost first.
       if (e.code === 'Escape') {
         e.preventDefault();
-        if (store.kbOpen || store.statsOpen) store.setPage(null);
+        if (onPage) store.setPage(null);
         else if (store.result) store.dismissResult();
+        else if (store.practicing) store.setPracticing(false);
         else store.clearOrbs();
         return;
       }
 
-      const onPage = store.kbOpen || store.statsOpen;
+      /* The board only answers to you once you have committed to something.
+         An idle mode used to be playable, which made every unstarted mode a
+         second sandbox and left the Begin button looking optional. */
+      const live = store.running || store.practicing;
       const action = byCode.get(e.code);
       if (action) {
         // Also stops Space/Enter from re-activating a focused button.
         e.preventDefault();
-        if (!onPage) perform(action);
+        if (live && !onPage) perform(action);
         return;
       }
 
@@ -135,7 +141,8 @@ export function useInput(): void {
       if (!action) return;
       e.preventDefault();
       const store = useStore.getState();
-      if (store.paused || store.kbOpen || store.statsOpen) return;
+      if (store.paused || store.kbOpen || store.statsOpen || store.masteryOpen) return;
+      if (!store.running && !store.practicing) return;
       perform(action);
     };
 

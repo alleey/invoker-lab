@@ -15,16 +15,48 @@ export function RightRail(): JSX.Element | null {
   const bindings = useStore((s) => s.bindings);
   const presetId = useStore((s) => s.presetId);
   const setPage = useStore((s) => s.setPage);
-  const overlay = useStore((s) => s.kbOpen || s.statsOpen || !!s.result || s.paused);
-  if (overlay) return null;
+  /**
+   * Gone the moment you commit to anything. Two of these three panels are
+   * mastery by another name, so leaving them clickable mid-drill would be a
+   * back door to the readout the drill deliberately withholds — and the run
+   * clock would keep going while you read it.
+   */
+  const away = useStore(
+    (s) => s.kbOpen || s.statsOpen || s.masteryOpen || !!s.result || s.paused || s.practicing || s.running,
+  );
+  if (away) return null;
 
   const life = summarise(stats.spells);
   const weakest = highlights(stats).weakest;
   const preset = PRESETS.find((p) => p.id === presetId);
   const attempted = life.hits + life.misses;
+  const seen = life.spellsSeen;
 
   return (
     <div className="rail-r">
+      <button
+        className="stats-ro"
+        type="button"
+        aria-label="Mastery — click for the star chart"
+        onClick={() => setPage('mastery')}
+      >
+        <p className="lb">
+          Mastery <i>click for the chart</i>
+        </p>
+        <p>
+          <span>Spells</span>
+          <span>
+            <b>{seen}</b> of 10 cast
+            {seen > 0 && life.accuracy !== null ? (
+              <>
+                {' '}
+                · <b>{pct(life.accuracy)}</b> overall
+              </>
+            ) : null}
+          </span>
+        </p>
+      </button>
+
       <button className="stats-ro" type="button" aria-label="Stats — click for detail" onClick={() => setPage('stats')}>
         <p className="lb">
           Stats <i>click for detail</i>
