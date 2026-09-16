@@ -1,0 +1,16 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+.DS_Store
+.vite/
+
+# editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.claude/
+
+# tauri (when you add the desktop target)
+src-tauri/target/
+src-tauri/gen/
