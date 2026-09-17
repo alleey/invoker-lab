@@ -96,7 +96,7 @@ GitHub Pages on every push to `main`.
 `vite.config.ts` sets `base` to `/<REPO>/` only under GitHub Actions, because a
 Pages project site serves from a subpath while dev and a desktop build serve
 from the root. **Rename `REPO` in that file if the repository is not called
-`InvokerLab`** — a wrong `base` is a white page with 404'd assets, and it is
+`invoker-lab`** — a wrong `base` is a white page with 404'd assets, and it is
 the cause essentially every time.
 
 Pages from a private repo needs a paid GitHub plan.
