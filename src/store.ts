@@ -32,7 +32,9 @@ import { SPELLS } from './engine/spells';
  * leave them be unless you also ship a migration that copies the old keys over.
  */
 const BINDINGS_KEY = 'arsenal-magus.bindings.v1';
-const STATS_KEY = 'arsenal-magus.stats.v3';
+const STATS_KEY = 'arsenal-magus.stats.v5';
+/** Read once, migrated forward, then never touched again. */
+const STATS_KEY_PREV = 'arsenal-magus.stats.v4';
 const LENGTHS_KEY = 'arsenal-magus.lengths.v2';
 const TIMEOUTS_KEY = 'arsenal-magus.timeouts.v1';
 const PREFS_KEY = 'arsenal-magus.prefs.v1';
@@ -63,6 +65,8 @@ export interface DrillResult {
   /** The number this mode is actually judged on. */
   score: number;
   scoreBy: ScoreBy;
+  /** False when the player stopped the run rather than playing it out. */
+  completed: boolean;
   hits: number;
   misses: number;
   combos: number;
@@ -99,6 +103,9 @@ export interface LastRun {
 /** How many times a single run may be held. */
 export const PAUSE_MAX = 3;
 
+/** The three count that opens a run, and the one that releases a pause. */
+export const COUNT_IN_MS = 3000;
+
 /** The full-screen surfaces. Only one is ever open, so they cannot stack. */
 export type Page = 'keyboard' | 'stats' | 'mastery' | null;
 
@@ -110,7 +117,7 @@ export interface Celebration {
   hex: string;
   /**
    * What was cast. The flourish used to work this out from the last entry in
-   * the cast log, which the sandbox never writes to — so free casting drew no
+   * the cast log, which the sandbox never writes to — so practice drew no
    * reagent rings at all, and after a drill it drew them over whichever spell
    * had ended that run. An event should carry its own subject.
    */
@@ -166,17 +173,35 @@ if (typeof window !== 'undefined') {
 }
 
 /**
- * Professional used to score the number of spells landed and now scores the
- * share of chains routed perfectly, so any record stored under the old meaning
- * is a count pretending to be a percentage. Drop that one number and leave the
- * rest of a player's history alone — bumping the storage key would throw away
- * every spell's lifetime record to fix a single field.
+ * Records that cannot be compared with anything set since.
+ *
+ * These three modes gave two seconds back per landed cast, so a fast player
+ * topped the clock up faster than they spent it and the run never ended. The
+ * scores that came out are not achievable now that a minute is a minute —
+ * Streak records in the fifties against a realistic twenty.
+ *
+ * Dropping them is deliberate. A stale number is worse than no number: it
+ * reads as a target you have already beaten, and it silently gates every
+ * future leaderboard submission behind a score nobody can reach. Everything
+ * else in a player's history is untouched; bumping the storage key wholesale
+ * would throw away every spell's lifetime record to fix three fields.
  */
-function migrateStats(stats: Stats): Stats {
-  if (!('efficient' in stats.modes)) return stats;
+const STALE_RECORDS: readonly string[] = ['rapid', 'combo', 'efficient'];
+
+function loadStats(): Stats {
+  // The current key exists once the migration has run, so it can never run
+  // twice. Doing this by key rather than by inspecting the data matters:
+  // an inflated record is indistinguishable from an honest one, and a
+  // migration that cannot tell the difference would erase them on every load.
+  const current = localStorage.getItem(STATS_KEY);
+  if (current) return readJSON<Stats>(STATS_KEY, EMPTY_STATS);
+
+  const stats = readJSON<Stats>(STATS_KEY_PREV, EMPTY_STATS);
   const modes = { ...stats.modes };
-  delete modes.efficient;
-  return { ...stats, modes };
+  for (const id of STALE_RECORDS) delete modes[id];
+  const migrated: Stats = { ...stats, modes };
+  writeJSON(STATS_KEY, migrated);
+  return migrated;
 }
 
 function spellHex(spell: Spell): string {
@@ -220,7 +245,7 @@ interface State {
   chainPresses: number;
   /** The challenge after this one, drawn early so it can be shown and planned for. */
   nextCombo: Spell[];
-  /** When the current spell's shot clock expires. 0 means it never does. */
+  /** When the current spell's time expires. 0 means it never does. */
   spellEndsAt: number;
   spellTimeoutMs: number;
 
@@ -270,6 +295,14 @@ interface State {
   practicing: boolean;
   /** Held drills stop every clock; the count to resume runs on its own timer. */
   paused: boolean;
+  /**
+   * The same hold, used to open a run rather than interrupt one.
+   *
+   * Deliberately the pause mechanism and not a second countdown: pausing
+   * already stops every clock and pushes them all forward on release, which is
+   * exactly what a starting drill needs. It costs no pause from the allowance.
+   */
+  starting: boolean;
   pausedAt: number;
   resumeUntil: number;
   pausesLeft: number;
@@ -287,7 +320,11 @@ interface State {
   setFocusWeak(on: boolean): void;
   spellTimedOut(): void;
   start(): void;
-  finish(): void;
+  /**
+   * End the run. `abandoned` means you stopped it yourself rather than playing
+   * it out — the clock running down, or a mode ending on your mistake.
+   */
+  finish(abandoned?: boolean): void;
   /** Close the results without clearing `lastRun` — the stats page still wants it. */
   dismissResult(): void;
   toggleRun(): void;
@@ -409,7 +446,7 @@ export const useStore = create<State>()((set, get) => {
 
     verdict: IDLE,
     result: null,
-    stats: migrateStats(readJSON<Stats>(STATS_KEY, EMPTY_STATS)),
+    stats: loadStats(),
     sessionSpells: {},
     sessionMode: null,
 
@@ -423,6 +460,7 @@ export const useStore = create<State>()((set, get) => {
     masteryOpen: false,
     practicing: false,
     paused: false,
+    starting: false,
     pausedAt: 0,
     resumeUntil: 0,
     pausesLeft: PAUSE_MAX,
@@ -486,6 +524,7 @@ export const useStore = create<State>()((set, get) => {
         spellEndsAt: s.spellEndsAt ? s.spellEndsAt + delta : 0,
         shownAt: s.shownAt ? s.shownAt + delta : 0,
         paused: false,
+        starting: false,
         pausedAt: 0,
         resumeUntil: 0,
       });
@@ -570,9 +609,13 @@ export const useStore = create<State>()((set, get) => {
         sessionSpells: {},
         sessionMode: s.mode,
         casts: [],
-        paused: false,
-        pausedAt: 0,
-        resumeUntil: 0,
+        /* Opened on a three count. The hardest modes give you one second a
+           spell from the first frame, and starting cold means the first spell
+           is lost before your hands are on the keys. */
+        paused: true,
+        starting: true,
+        pausedAt: performance.now(),
+        resumeUntil: performance.now() + COUNT_IN_MS,
         pausesLeft: PAUSE_MAX,
         verdict: IDLE,
         celebration: null,
@@ -581,7 +624,7 @@ export const useStore = create<State>()((set, get) => {
     },
 
     /**
-     * The shot clock ran out. Counts against the spell exactly like a wrong
+     * The spell time ran out. Counts against the spell exactly like a wrong
      * cast, then moves on — the pressure is the point.
      */
     spellTimedOut() {
@@ -606,7 +649,7 @@ export const useStore = create<State>()((set, get) => {
       if (config.endOnMiss) get().finish();
     },
 
-    finish() {
+    finish(abandoned = false) {
       const s = get();
       if (!s.running) return;
       const config = MODES[s.mode];
@@ -622,19 +665,31 @@ export const useStore = create<State>()((set, get) => {
           : config.scoreBy === 'efficientSpells'
             ? s.optimalSpells
             : s.hits;
-      const isRecord = score > previousBest;
+      /* A run you stopped yourself sets nothing.
+       *
+       * Not only the leaderboard: the local record and the run history go
+       * untouched too. Letting an abandoned run take the local best would be
+       * worse than pointless — it would raise the bar that later, honestly
+       * completed runs have to clear before they are ever submitted, and a
+       * player could strand their own leaderboard entry by quitting well.
+       * Per-spell accuracy still counts; that is practice, not a result. */
+      const isRecord = !abandoned && score > previousBest;
 
-      const stats: Stats = {
-        ...s.stats,
-        drills: s.stats.drills + 1,
-        modes: isRecord ? { ...s.stats.modes, [s.mode]: score } : s.stats.modes,
-        logs: {
-          ...s.stats.logs,
-          [s.mode]: [...(s.stats.logs[s.mode] ?? []), score].slice(-LOG_CAP),
-        },
-      };
-      pendingStats = stats;
-      flushStats();
+      const stats: Stats = abandoned
+        ? s.stats
+        : {
+            ...s.stats,
+            drills: s.stats.drills + 1,
+            modes: isRecord ? { ...s.stats.modes, [s.mode]: score } : s.stats.modes,
+            logs: {
+              ...s.stats.logs,
+              [s.mode]: [...(s.stats.logs[s.mode] ?? []), score].slice(-LOG_CAP),
+            },
+          };
+      if (!abandoned) {
+        pendingStats = stats;
+        flushStats();
+      }
 
       set({
         running: false,
@@ -646,6 +701,7 @@ export const useStore = create<State>()((set, get) => {
         stats,
         celebration: null,
         paused: false,
+        starting: false,
         resumeUntil: 0,
         /* Kept whole so the results view and the stats page can show that run
            after it has ended, without the live counters having to survive. */
@@ -663,6 +719,7 @@ export const useStore = create<State>()((set, get) => {
         result: {
           score,
           scoreBy: config.scoreBy,
+          completed: !abandoned,
           hits: s.hits,
           misses: s.misses,
           combos: s.combos,
@@ -685,7 +742,8 @@ export const useStore = create<State>()((set, get) => {
       const s = get();
       // The sandbox has nothing to start or stop; leave it first.
       if (s.practicing) return;
-      if (s.running) s.finish();
+      // Space and the End drill button are the only manual stop there is.
+      if (s.running) s.finish(true);
       else s.start();
     },
 
@@ -753,7 +811,7 @@ export const useStore = create<State>()((set, get) => {
           streak: 0,
           shake: s.shake + 1,
         };
-        // Under a shot clock there is no second chance — the next spell is
+        // Under a spell time there is no second chance — the next spell is
         // already up. Everywhere else you stay on it until you get it right.
         // A mode that ends on a miss has nothing to draw next; it just stops.
         if (config.endOnMiss) {
@@ -799,7 +857,8 @@ export const useStore = create<State>()((set, get) => {
         streak,
         bestStreak: Math.max(s.bestStreak, streak),
         timeTotal: s.timeTotal + ms,
-        endsAt: config.bonusMs ? s.endsAt + config.bonusMs : s.endsAt,
+        // The clock never moves once a run starts: a minute means a minute.
+        endsAt: s.endsAt,
       };
 
       if (!comboDone) {
@@ -925,3 +984,9 @@ export const useStore = create<State>()((set, get) => {
     },
   };
 });
+
+/* Console access in dev only, for inspecting live drill state. Stripped from
+   production builds. */
+if (import.meta.env.DEV) {
+  (window as unknown as { __game?: unknown }).__game = useStore;
+}

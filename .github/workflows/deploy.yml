@@ -24,7 +24,24 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+
+      # `.env` is gitignored, so without this the build produces a site with no
+      # leaderboard and no sign-in — and says nothing about it. Set both under
+      # Settings > Secrets and variables > Actions > Variables. Neither is a
+      # secret: the client id is public by design and the Apps Script URL
+      # grants nothing on its own, since every write needs a Google ID token.
+      - name: Check leaderboard configuration
+        run: |
+          if [ -z "${{ vars.VITE_LEADERBOARD_URL }}" ] || [ -z "${{ vars.VITE_GOOGLE_CLIENT_ID }}" ]; then
+            echo "::warning::VITE_LEADERBOARD_URL or VITE_GOOGLE_CLIENT_ID is unset - deploying without leaderboards."
+          else
+            echo "Leaderboard configured."
+          fi
+
       - run: npm run build
+        env:
+          VITE_LEADERBOARD_URL: ${{ vars.VITE_LEADERBOARD_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

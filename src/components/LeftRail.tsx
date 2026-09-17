@@ -7,7 +7,7 @@ import { SpellIcon } from './SpellIcon';
 /**
  * The spell you owe and the cheapest way to it. Only ever shown mid-drill —
  * the brief that used to live here now sits centre stage, where there is room
- * for it. What you need *during* a cast (the chain, the shot clock) is under
+ * for it. What you need *during* a cast (the chain, the spell time) is under
  * the stars instead, because a rail on a wide screen is too far from where you
  * are looking to read in the two seconds you have.
  */

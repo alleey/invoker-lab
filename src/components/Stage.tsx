@@ -197,6 +197,13 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
          marker and the route go away. They differ only in what they count. */
       const scored = view === 'run' || view === 'life';
 
+      /* Which spells this run can actually draw. Dimming the rest is the only
+         way the weakness filter is visible on the board — otherwise "why do I
+         keep getting the same six" has no answer you can see. */
+      const pool = view === 'drill' && S.running && S.pool.length < NODES.length
+        ? new Set(S.pool.map((p) => p.id))
+        : null;
+
       // lattice
       ctx.strokeStyle = view === 'idle' ? 'rgba(184,147,74,.1)' : 'rgba(184,147,74,.24)';
       ctx.lineWidth = 1;
@@ -327,7 +334,7 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
         const sp = nd.spell;
         const isT = !!target && sp.id === target.id;
         // No mastery on hover mid-drill: it is a distraction dressed as help,
-        // and the one number that matters right then is the shot clock.
+        // and the one number that matters right then is the spell time.
         const isH = S.selected?.id === sp.id && !S.running && !S.paused;
         const hex = hexFor(sp);
         const li = S.slots.findIndex((x) => x && x.id === sp.id);
@@ -338,8 +345,10 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
           view === 'run' ? (runRec ? runRec.h / (runRec.h + runRec.m) : null) : accuracy(lifeStat);
         const att = view === 'run' ? (runRec ? runRec.h + runRec.m : 0) : attempts(lifeStat);
 
+        const out = !!pool && !pool.has(sp.id);
+
         ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = isT || isH ? 0.85 : 0.4;
+        ctx.globalAlpha = out ? 0.12 : isT || isH ? 0.85 : 0.4;
         ctx.drawImage(glow(hex), p[0] - 22 * NS, p[1] - 22 * NS, 44 * NS, 44 * NS);
         ctx.globalAlpha = 1;
         ctx.globalCompositeOperation = 'source-over';
@@ -367,7 +376,7 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
           ctx.lineCap = 'butt';
         }
 
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = out ? 'rgba(255,255,255,.28)' : '#fff';
         ctx.beginPath();
         ctx.arc(p[0], p[1], 2.6 * NS, 0, 7);
         ctx.fill();
@@ -415,7 +424,7 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
         const words = sp.name.toUpperCase().split(' ');
         const wrap = tight && words.length > 1;
         ctx.font = '600 11px "IBM Plex Mono", monospace';
-        ctx.fillStyle = isT || isH ? '#fff' : 'rgba(235,225,204,.78)';
+        ctx.fillStyle = out ? 'rgba(235,225,204,.26)' : isT || isH ? '#fff' : 'rgba(235,225,204,.78)';
         if (wrap) {
           ctx.fillText(words[0] as string, p[0], p[1] + L1);
           ctx.fillText(words.slice(1).join(' '), p[0], p[1] + L2);
@@ -429,8 +438,13 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
           const blank = view === 'run' ? 'not drawn' : 'never cast';
           ctx.fillText(a === null ? blank : `${Math.round(a * 100)}% · ${att}`, p[0], subY);
         } else {
-          ctx.fillStyle = li >= 0 ? '#ffd76a' : 'rgba(138,130,114,.9)';
-          ctx.fillText(li >= 0 ? `slot ${li + 1}` : cost === 0 ? 'in hand' : `${cost} key${cost > 1 ? 's' : ''}`, p[0], subY);
+          if (out) {
+            ctx.fillStyle = 'rgba(97,90,77,.75)';
+            ctx.fillText('not in pool', p[0], subY);
+          } else {
+            ctx.fillStyle = li >= 0 ? '#ffd76a' : 'rgba(138,130,114,.9)';
+            ctx.fillText(li >= 0 ? `slot ${li + 1}` : cost === 0 ? 'in hand' : `${cost} key${cost > 1 ? 's' : ''}`, p[0], subY);
+          }
         }
       }
 
@@ -570,6 +584,20 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
       S.setSelected(best);
     };
 
+    /**
+     * The count-in and the resume count run on a timer, not on frames.
+     *
+     * `requestAnimationFrame` stops in a backgrounded tab, so a countdown
+     * driven by the render loop freezes the moment you look away — and a held
+     * board that cannot release itself is stuck forever. The loop still draws
+     * the ring and the numeral, because those only matter when you can see
+     * them; this is what actually ends the hold.
+     */
+    const release = window.setInterval(() => {
+      const S = useStore.getState();
+      if (S.paused && S.resumeUntil && performance.now() >= S.resumeUntil) S.endPause(performance.now());
+    }, 100);
+
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(stage);
@@ -578,6 +606,7 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
 
     return () => {
       cancelAnimationFrame(raf);
+      clearInterval(release);
       ro.disconnect();
       stage.removeEventListener('click', onPick);
     };

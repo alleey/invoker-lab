@@ -14,3 +14,9 @@ dist-ssr/
 # tauri (when you add the desktop target)
 src-tauri/target/
 src-tauri/gen/
+
+# Disposable leaderboard wiring test page (delete once the game is wired)
+public/signin-test.html
+
+# local leaderboard config
+.env

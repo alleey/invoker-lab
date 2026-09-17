@@ -3,6 +3,9 @@ import { Altar } from './components/Altar';
 import { CrashNotice } from './components/CrashNotice';
 import { StarCard } from './components/StarCard';
 import { KeyboardPage } from './components/KeyboardPage';
+import { HandlePrompt } from './components/HandlePrompt';
+import { Landing } from './components/Landing';
+import { LeaderboardPage } from './components/LeaderboardPage';
 import { LeftRail } from './components/LeftRail';
 import { MasteryPage } from './components/MasteryPage';
 import { ModeBrief } from './components/ModeBrief';
@@ -18,6 +21,8 @@ import { Verdict } from './components/Verdict';
 import { loadKeyboardLayout } from './engine/bindings';
 import { startBlackBox } from './engine/blackbox';
 import { useInput } from './hooks/useInput';
+import { useLeaderboardSync } from './hooks/useLeaderboardSync';
+import { useLeaderboard } from './leaderboardStore';
 import { useStore } from './store';
 
 /**
@@ -29,16 +34,19 @@ import { useStore } from './store';
  */
 export function App(): JSX.Element {
   useInput();
+  useLeaderboardSync();
 
+  const entered = useLeaderboard((s) => s.entered);
+  const lbOpen = useLeaderboard((s) => s.open);
+  const onPage = useStore((s) => s.kbOpen || s.statsOpen || s.masteryOpen);
   /**
    * The sandbox gets the header slot to itself.
    *
    * Its title and Done button are positioned exactly where the app title and
    * the tiles are, so both drew on top of each other. Ceding the row is also
    * the honest thing: casts, streak, accuracy and a session clock are all
-   * meaningless in free casting, and showing them implies otherwise.
+   * meaningless in practice, and showing them implies otherwise.
    */
-  const onPage = useStore((s) => s.kbOpen || s.statsOpen || s.masteryOpen);
   const chrome = useStore((s) => !s.kbOpen && !s.statsOpen && !s.masteryOpen && !s.practicing);
   const board = useStore((s) => (s.running || s.practicing) && !s.paused && !s.result);
   const [, bumpLayout] = useState(0);
@@ -59,25 +67,36 @@ export function App(): JSX.Element {
     [],
   );
 
+  if (!entered) {
+    return (
+      <Stage>
+        <Landing />
+        <HandlePrompt />
+      </Stage>
+    );
+  }
+
   return (
     <Stage>
-      {chrome && <TopBar />}
+      {chrome && !lbOpen && <TopBar />}
       <CrashNotice />
 
-      <ModeBrief />
-      <PracticeBar />
+      {!lbOpen && <ModeBrief />}
+      {!lbOpen && <PracticeBar />}
       <StageBar />
       <LeftRail />
       <StarCard />
-      <RightRail />
+      {!lbOpen && <RightRail />}
       {board && !onPage && <Altar />}
       <Verdict />
 
-      {!onPage && <ResultsView />}
+      {!onPage && !lbOpen && <ResultsView />}
       <MasteryPage />
       <StatsPage />
       <KeyboardPage />
+      <LeaderboardPage />
       <PausePage />
+      <HandlePrompt />
     </Stage>
   );
 }

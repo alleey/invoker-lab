@@ -2,6 +2,7 @@ import { type CSSProperties } from 'react';
 import { mins, scoreUnit, sec, tier } from '../engine/format';
 import { MODES } from '../engine/modes';
 import { SPELL_BY_ID, type Spell } from '../engine/spells';
+import { useLeaderboard } from '../leaderboardStore';
 import { useStore, type CastLog } from '../store';
 import { Sigil } from './Sigil';
 
@@ -36,6 +37,39 @@ function perSpell(casts: readonly CastLog[]): Per[] {
   return [...per.values()];
 }
 
+/**
+ * Where your result went, if anywhere. Never blocks: the score and the record
+ * are already on screen from local state, and this only ever appends to them.
+ */
+function SyncLine(): JSX.Element | null {
+  const sync = useLeaderboard((s) => s.sync);
+  const identity = useLeaderboard((s) => s.identity);
+
+  if (sync.kind === 'idle') return null;
+  if (sync.kind === 'sending') return <p className="res-sync">Sending to the leaderboard…</p>;
+  if (sync.kind === 'queued') {
+    return (
+      <p className="res-sync bad">
+        {identity ? 'Saved here — will send when the leaderboard is reachable.' : 'Saved here. Sign in to put it on the board.'}
+      </p>
+    );
+  }
+  if (sync.kind === 'failed') {
+    return <p className="res-sync bad">Leaderboard unreachable — it will send next time.</p>;
+  }
+
+  const { status, rank } = sync.result;
+  if (status === 'ranked') {
+    return (
+      <p className="res-sync">
+        On the leaderboard at <b>#{rank}</b>
+      </p>
+    );
+  }
+  if (status === 'not_ranked') return <p className="res-sync bad">Not in the top 25.</p>;
+  return null;
+}
+
 export function ResultsView(): JSX.Element {
   const result = useStore((s) => s.result);
   const lastRun = useStore((s) => s.lastRun);
@@ -64,7 +98,7 @@ export function ResultsView(): JSX.Element {
     <section className="results on">
       <div className="res-left">
         <p className="eb">
-          Drill complete · {c.label}
+          {result.completed ? 'Drill complete' : 'Ended early'} · {c.label}
           {runDurationMs ? ` · ${mins(runDurationMs)}` : ''}
         </p>
         <div className="score">
@@ -79,12 +113,6 @@ export function ResultsView(): JSX.Element {
               · avg <b>{sec(result.avgMs)}</b>
             </>
           )}
-          {c.bonusMs > 0 && result.hits > 0 && (
-            <>
-              {' '}
-              · <b>{(result.hits * c.bonusMs) / 1000}s</b> earned back
-            </>
-          )}
           {result.tracksEfficiency && result.judged > 0 && (
             <>
               {' '}
@@ -92,10 +120,13 @@ export function ResultsView(): JSX.Element {
             </>
           )}
         </p>
+        <SyncLine />
         <span className={`record${result.isRecord ? '' : ' plain'}`}>
-          {result.isRecord
-            ? `New record · previous best ${result.previousBest}`
-            : `Best in this mode is ${result.previousBest}`}
+          {!result.completed
+            ? `Ended early — nothing recorded. Best in this mode is ${result.previousBest}`
+            : result.isRecord
+              ? `New record · previous best ${result.previousBest}`
+              : `Best in this mode is ${result.previousBest}`}
         </span>
         <div className="res-btns">
           <button className="btn primary" type="button" onClick={() => start()}>
@@ -105,7 +136,7 @@ export function ResultsView(): JSX.Element {
             Full stats
           </button>
           <button className="btn" type="button" onClick={() => dismissResult()}>
-            Back · Esc
+            Main menu · Esc
           </button>
         </div>
       </div>

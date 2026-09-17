@@ -8,7 +8,7 @@ export const pct = (v: number): string => `${Math.round(v * 100)}%`;
 /**
  * A session length, in minutes. Session clocks are whole minutes, so "3 min"
  * reads at a glance where "180s" has to be divided first. Anything shorter than
- * a minute — a shot clock — stays in seconds, where it belongs.
+ * a minute — a spell time — stays in seconds, where it belongs.
  */
 export const mins = (ms: number): string => (ms < 60_000 ? `${ms / 1000}s` : `${ms / 60_000} min`);
 
@@ -28,3 +28,23 @@ export const dark = (hex: string): string => {
 /** What a mode's score counts, in the player's words. */
 export const scoreUnit = (by: 'casts' | 'streak' | 'efficientSpells'): string =>
   by === 'streak' ? 'longest streak' : by === 'efficientSpells' ? 'spells at par' : 'spells landed';
+
+/**
+ * How long ago, in the coarsest unit that is still true.
+ *
+ * A record that has stood for a month reads differently from one set an hour
+ * ago, and that context is the whole reason the board carries a timestamp.
+ */
+export function ago(at: number | undefined, now: number = Date.now()): string {
+  if (!at || !Number.isFinite(at)) return '';
+  const s = Math.max(0, Math.round((now - at) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  if (d < 30) return `${d}d ago`;
+  const mo = Math.round(d / 30);
+  return mo < 12 ? `${mo}mo ago` : `${Math.round(mo / 12)}y ago`;
+}

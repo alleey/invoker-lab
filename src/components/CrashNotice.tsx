@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { clearCrash, readLastCrash } from '../engine/blackbox';
+import { useLeaderboard } from '../leaderboardStore';
+import { useStore } from '../store';
 
 /**
  * Shown once after a load that follows an unclean exit. It reports the last
@@ -8,7 +10,16 @@ import { clearCrash, readLastCrash } from '../engine/blackbox';
  */
 export function CrashNotice(): JSX.Element | null {
   const [crumb, setCrumb] = useState(() => readLastCrash());
-  if (!crumb) return null;
+  /**
+   * Hidden behind a full-screen page rather than unmounted.
+   *
+   * This component remembers being dismissed in local state, so unmounting it
+   * resurrects the notice: closing the leaderboard would re-read the
+   * breadcrumb and show it all over again, every single time.
+   */
+  const behindPage = useStore((s) => s.kbOpen || s.statsOpen || s.masteryOpen || s.practicing);
+  const behindBoard = useLeaderboard((s) => s.open);
+  if (!crumb || behindPage || behindBoard) return null;
 
   const dismiss = () => {
     clearCrash();

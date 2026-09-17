@@ -80,7 +80,7 @@ canvas.layer{position:absolute;inset:0;width:100%;height:100%;display:block}
 .route{margin-top:16px;padding-top:12px;border-top:1px solid var(--brass-line);color:var(--dim);display:flex;flex-wrap:wrap;align-items:center;gap:7px 8px;line-height:1.6}
 .route .k,.card .from .k{margin-right:0}
 .route b{color:var(--gold);font-weight:600}
-/* The chain and the shot clock belong under the stars, not in the left rail —
+/* The chain and the spell time belong under the stars, not in the left rail —
    on a wide screen a rail item sits so far from where you are looking that it
    may as well not be there. --cx keeps them on the constellation's centre. */
 .stagebar{position:absolute;left:var(--cx,50%);bottom:240px;translate:-50% 0;width:min(620px,calc(100vw - 80px));display:flex;flex-direction:column;align-items:center;gap:12px;pointer-events:none}
@@ -414,7 +414,7 @@ table.st{width:100%;border-collapse:collapse}
 .weakest.live .lb{color:var(--gold)}
 .weakest.live .chip{border-color:rgba(255,215,106,.3)}
 
-/* ── free casting ── */
+/* ── practice ── */
 .practice-live{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;
   padding:9px 16px;border:1px solid rgba(255,215,106,.35);background:rgba(7,5,4,.6);color:var(--dim)}
 .practice-live b{color:#fff;font-family:'Syncopate',sans-serif;font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
@@ -490,3 +490,116 @@ table.st{width:100%;border-collapse:collapse}
 .chain-sep{display:block;width:1px;height:18px;background:var(--brass-line);margin:0 4px}
 .chain span.next{opacity:.5;border-style:dashed}
 .chain span.next .sicon{filter:grayscale(.35)}
+
+/* ── landing ──
+   The first screen, and the only place sign-in is offered up front. Anonymous
+   is presented as an equal choice, not a lesser one. */
+.landing{position:absolute;inset:0;display:grid;place-items:center;overflow:auto;scrollbar-width:thin;padding:34px}
+.landing-in{width:min(880px,100%);text-align:left}
+.landing h1{font-family:'Syncopate',sans-serif;font-weight:700;font-size:clamp(18px,2.4vw,30px);line-height:1.3;
+  letter-spacing:.02em;margin:0 0 14px;color:#fff;text-wrap:balance}
+.landing-lead{color:var(--dim);line-height:1.7;margin:0 0 26px;max-width:62ch}
+.landing-ways{display:grid;grid-template-columns:repeat(auto-fit,minmax(288px,1fr));gap:18px}
+.way{border:1px solid var(--brass-line);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.way p{margin:0;color:var(--dim);line-height:1.65}
+.way .lb{color:var(--gold)}
+.way .begin{margin-top:auto;align-self:flex-start}
+.way .n{color:var(--dimmer);font-size:11px;line-height:1.55}
+.gbtn{margin-top:auto;min-height:44px;color-scheme:light}
+.landing-off{color:var(--dimmer);font-size:11px}
+.landing-who{margin:20px 0 0;color:var(--gold)}
+
+/* ── leaderboard ── */
+.lbpage{position:absolute;inset:0;display:none;align-items:flex-start;justify-content:center;background:rgba(7,5,4,.82)}
+.lbpage.on{display:flex}
+.lb-who b{color:var(--bone);font-weight:600}
+.lb-foot{color:var(--dimmer);line-height:1.6;margin:18px 0 0;max-width:74ch}
+
+/* the sync line on the results view */
+.res-sync{display:inline-flex;align-items:center;gap:8px;margin-top:12px;color:var(--dim)}
+.res-sync b{color:var(--gold);font-weight:600}
+.res-sync.bad{color:var(--dimmer)}
+
+/* Full-screen pages sit above the board furniture; the pause hold sits above
+   everything, since it exists to make the board unreadable. */
+.kbpage,.statspage,.masterypage,.lbpage{z-index:14}
+.pausepage{z-index:20}
+
+/* ── leaderboard name ──
+   Asked once, before anything of yours becomes public. Above every other
+   surface, including the landing screen. */
+.handle{position:absolute;inset:0;z-index:30;display:grid;place-items:center;padding:34px;
+  background:rgba(7,5,4,.86)}
+.handle-in{width:min(460px,100%);border:1px solid var(--brass-line);background:var(--ground);padding:22px 24px;
+  display:flex;flex-direction:column;gap:10px}
+.handle-in h2{font-family:'Syncopate',sans-serif;font-weight:700;font-size:clamp(15px,1.8vw,20px);line-height:1.3;
+  margin:0;color:#fff;text-wrap:balance}
+.handle-note{margin:0;color:var(--dim);line-height:1.65}
+.handle-field{background:#0d0a08;border:1px solid var(--brass-line);color:var(--bone);font:inherit;
+  font-size:15px;padding:10px 12px;margin-top:4px}
+.handle-field:focus{outline:none;border-color:var(--gold)}
+.handle-count{margin:0;color:var(--dimmer);font-size:11px}
+.handle-btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.handle-btns .begin{margin-top:0}
+.handle .n{margin:2px 0 0;color:var(--dimmer);font-size:11px;line-height:1.55}
+.lb-sub{font-style:normal;color:var(--dimmer)}
+
+/* Cards sized for the names people actually pick, not for the shortest ones.
+   The heading stacks instead of sharing a line: "Rapid Fire" beside "spells
+   landed" collided the moment either grew, and both are load-bearing. */
+.lb-who{display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap;color:var(--dim);
+  border-bottom:1px solid var(--brass-line);padding-bottom:14px;margin-bottom:16px}
+/* Rank and score are fixed columns so a long name can only ever shorten itself. */
+
+/* One mode at a time. Five boards abreast fitted seven names and no dates;
+   a tab spends the whole width on one and buys all twenty-five. */
+.lb-wrap{width:min(860px,calc(100vw - 68px));max-height:calc(100% - 130px);overflow:auto;
+  scrollbar-width:thin;margin-top:104px}
+.lb-tabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--brass-line);margin-bottom:14px}
+.lb-tab{display:flex;align-items:center;gap:7px;background:none;border:0;border-bottom:2px solid transparent;
+  padding:9px 13px;margin-bottom:-1px;color:var(--dim);font-family:'Syncopate',sans-serif;font-size:11px;
+  letter-spacing:.14em;text-transform:uppercase}
+.lb-tab i{font-style:normal;font-family:'IBM Plex Mono',monospace;letter-spacing:0;color:var(--dimmer);font-size:11px}
+.lb-tab:hover{color:var(--bone)}
+.lb-tab[aria-pressed=true]{color:var(--gold);border-bottom-color:var(--gold)}
+.lb-tab[aria-pressed=true] i{color:var(--gold)}
+
+.lb-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:10px}
+.lb-unit{margin:0;font-family:'Syncopate',sans-serif;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dimmer)}
+.lb-status{margin:0;color:var(--dim)}
+.lb-empty{color:var(--dimmer);margin:18px 0;text-align:center}
+
+.lb-rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;counter-reset:none}
+/* Fixed rank, date and score columns, so a long name can only shorten itself. */
+.lb-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto auto;gap:14px;align-items:center;
+  padding:7px 12px;border:1px solid transparent;color:var(--dim)}
+.lb-rank{text-align:right;color:var(--dimmer);font-weight:400;font-variant-numeric:tabular-nums}
+.lb-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--bone)}
+.lb-when{color:var(--dimmer);font-size:11px;white-space:nowrap}
+.lb-score{font-style:normal;color:var(--gold);font-weight:600;font-variant-numeric:tabular-nums;
+  text-align:right;min-width:4ch}
+.lb-row:nth-child(even){background:rgba(184,147,74,.04)}
+
+/* The podium earns its own treatment; ranks four and below are a list. */
+.lb-row.p1,.lb-row.p2,.lb-row.p3{padding:11px 12px}
+.lb-row.p1 .lb-name,.lb-row.p2 .lb-name,.lb-row.p3 .lb-name{font-weight:600}
+.lb-row.p1 .lb-rank,.lb-row.p2 .lb-rank,.lb-row.p3 .lb-rank{font-size:14px;font-weight:600}
+.lb-row.p1{border-color:rgba(255,215,106,.45);background:linear-gradient(90deg,rgba(255,215,106,.14),transparent 70%)}
+.lb-row.p1 .lb-rank{color:var(--gold);text-shadow:0 0 12px rgba(255,215,106,.7)}
+.lb-row.p1 .lb-name{color:#fff}
+.lb-row.p1 .lb-score{font-size:15px}
+.lb-row.p2{border-color:rgba(235,225,204,.28);background:linear-gradient(90deg,rgba(235,225,204,.07),transparent 70%)}
+.lb-row.p2 .lb-rank{color:var(--bone)}
+.lb-row.p3{border-color:rgba(255,125,58,.3);background:linear-gradient(90deg,rgba(255,125,58,.08),transparent 70%)}
+.lb-row.p3 .lb-rank{color:var(--exort)}
+/* Your own row stays findable in a list of strangers, podium or not. */
+.lb-row.mine{border-color:rgba(90,209,255,.5)}
+.lb-row.mine .lb-name{color:var(--quas)}
+.lb-row.mine .lb-name::after{content:'you';font-family:'Syncopate',sans-serif;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--quas);margin-left:10px;opacity:.75}
+
+/* The count-in is the pause hold reused, and it stays just as opaque. A
+   translucent scrim let the target's node and lead line show through, which
+   handed you the first spell three seconds early — free in every mode, and
+   decisive in one that ends on a single mistake. */
+.pausepage.starting .pz h2{color:var(--gold)}

@@ -42,8 +42,6 @@ export interface Mode {
   /** Selectable clock lengths in ms. Empty means untimed. */
   durationOptions: readonly number[];
   defaultDuration: number;
-  /** Time added per landed spell, so a good run extends itself. */
-  bonusMs: number;
   /**
    * Judge each challenge against its shortest possible route and report the
    * share. True everywhere a target is handed out — routing is the skill, and
@@ -51,7 +49,7 @@ export interface Mode {
    */
   trackEfficiency: boolean;
   /**
-   * Seconds-per-spell shot clock. Empty means a spell waits for you forever.
+   * Seconds-per-spell limit. Empty means a spell waits for you forever.
    * When set, running out is a failure exactly like casting the wrong thing.
    */
   spellTimeoutOptions: readonly number[];
@@ -81,13 +79,12 @@ export const MODES: Record<ModeId, Mode> = {
       'Stack its three reagents with your orb keys.',
       'Invoke, then cast from the slot it lands in.',
     ],
-    scoring: 'Each clean cast counts one and adds two seconds back to the clock.',
+    scoring: 'Each clean cast counts one. The clock does not stop or stretch.',
     ends: 'When the clock runs out.',
     reveal: 'name',
     comboSizes: [1],
     durationOptions: CLOCKS,
     defaultDuration: 60_000,
-    bonusMs: 2_000,
     trackEfficiency: true,
     spellTimeoutOptions: [],
     defaultSpellTimeout: 0,
@@ -106,14 +103,12 @@ export const MODES: Record<ModeId, Mode> = {
       'Work through it left to right, one spell at a time.',
       'The combination only counts once every spell in it has landed.',
     ],
-    scoring:
-      'Each landed spell adds two seconds. No spell repeats inside a combination — it would be on cooldown.',
+    scoring: 'No spell repeats inside a combination — it would be on cooldown.',
     ends: 'When the clock runs out.',
     reveal: 'name',
     comboSizes: [2, 3, 4],
     durationOptions: CLOCKS,
     defaultDuration: 60_000,
-    bonusMs: 2_000,
     trackEfficiency: true,
     spellTimeoutOptions: [],
     defaultSpellTimeout: 0,
@@ -139,7 +134,6 @@ export const MODES: Record<ModeId, Mode> = {
     comboSizes: [2, 3, 4],
     durationOptions: CLOCKS,
     defaultDuration: 120_000,
-    bonusMs: 2_000,
     trackEfficiency: true,
     spellTimeoutOptions: [],
     defaultSpellTimeout: 0,
@@ -176,7 +170,6 @@ export const MODES: Record<ModeId, Mode> = {
     comboSizes: [1],
     durationOptions: CLOCKS,
     defaultDuration: 60_000,
-    bonusMs: 0,
     trackEfficiency: true,
     spellTimeoutOptions: [1_000, 2_000, 3_000],
     defaultSpellTimeout: 2_000,
@@ -189,11 +182,11 @@ export const MODES: Record<ModeId, Mode> = {
   daredevil: {
     id: 'daredevil',
     label: 'Dare Devil',
-    goal: 'Keep a perfect run alive. One second a spell, and one mistake of any kind ends it.',
+    goal: 'Keep a perfect run alive. A second and a half a spell, and one mistake of any kind ends it.',
     steps: [
-      'A spell appears with one second on it. No settings, no session clock.',
+      'A spell appears with a second and a half on it. No settings, no session clock.',
       'Land it — and land it by the shortest route from where you stand.',
-      'A wrong cast, a wasted keypress or a second gone all end the run there.',
+      'A wrong cast, a wasted keypress or the time running out all end the run there.',
     ],
     scoring: 'Your score is how many you landed before it ended.',
     ends: 'On your first mistake. Nothing else stops it.',
@@ -201,10 +194,9 @@ export const MODES: Record<ModeId, Mode> = {
     comboSizes: [1],
     durationOptions: [],
     defaultDuration: 0,
-    bonusMs: 0,
     trackEfficiency: true,
     spellTimeoutOptions: [],
-    defaultSpellTimeout: 1_000,
+    defaultSpellTimeout: 1_500,
     advanceOnMiss: false,
     scoreBy: 'streak',
     endOnMiss: true,
@@ -213,7 +205,7 @@ export const MODES: Record<ModeId, Mode> = {
   },
   practice: {
     id: 'practice',
-    label: 'Free casting',
+    label: 'Practice',
     goal: 'Cast anything you like, with nothing on the line.',
     steps: [
       'Stack any three reagents. A fourth pushes the oldest one out.',
@@ -226,7 +218,6 @@ export const MODES: Record<ModeId, Mode> = {
     comboSizes: [],
     durationOptions: [],
     defaultDuration: 0,
-    bonusMs: 0,
     trackEfficiency: false,
     spellTimeoutOptions: [],
     defaultSpellTimeout: 0,

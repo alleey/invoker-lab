@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { bars } from '../engine/bars';
+import { MODES } from '../engine/modes';
 import { useStore } from '../store';
 
 /**
@@ -8,8 +9,10 @@ import { useStore } from '../store';
  */
 export function PausePage(): JSX.Element {
   const paused = useStore((s) => s.paused);
+  const starting = useStore((s) => s.starting);
   const resumeUntil = useStore((s) => s.resumeUntil);
   const pausesLeft = useStore((s) => s.pausesLeft);
+  const mode = useStore((s) => s.mode);
   const numRef = useRef<HTMLElement>(null);
   const ringRef = useRef<SVGCircleElement>(null);
 
@@ -27,12 +30,13 @@ export function PausePage(): JSX.Element {
     pausesLeft === 0 ? 'Last pause of this run' : pausesLeft === 1 ? '1 pause left' : `${pausesLeft} pauses left`;
 
   return (
-    <section className={`pausepage${paused ? ' on' : ''}`}>
+    <section className={`pausepage${paused ? ' on' : ''}${starting ? ' starting' : ''}`}>
       <div className="pz">
-        <h2>Paused</h2>
-        <p className="pz-sub">{left}</p>
+        <h2>{starting ? MODES[mode].label : 'Paused'}</h2>
+        <p className="pz-sub">{starting ? 'Hands on the keys' : left}</p>
 
-        <div className={`pz-held${counting ? ' off' : ''}`}>
+        {/* The breathing bars mean "held indefinitely", which a count-in never is. */}
+        <div className={`pz-held${counting || starting ? ' off' : ''}`}>
           <i>
             <span />
             <span />
@@ -48,7 +52,15 @@ export function PausePage(): JSX.Element {
         </div>
 
         <p className="pz-keys">
-          <kbd>F9</kbd> or <kbd>Esc</kbd> to resume
+          {starting ? (
+            <>
+              <kbd>Space</kbd> to start now
+            </>
+          ) : (
+            <>
+              <kbd>F9</kbd> or <kbd>Esc</kbd> to resume
+            </>
+          )}
         </p>
       </div>
     </section>

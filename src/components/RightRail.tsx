@@ -3,6 +3,8 @@ import { ACTION_HEX, ACTION_LABEL, ACTIONS, keyLabel, PRESETS } from '../engine/
 import { pct } from '../engine/format';
 import { MODES } from '../engine/modes';
 import { highlights, summarise } from '../engine/stats';
+import { leaderboardConfigured } from '../engine/leaderboard';
+import { useLeaderboard } from '../leaderboardStore';
 import { useStore } from '../store';
 
 /**
@@ -15,6 +17,9 @@ export function RightRail(): JSX.Element | null {
   const bindings = useStore((s) => s.bindings);
   const presetId = useStore((s) => s.presetId);
   const setPage = useStore((s) => s.setPage);
+  const openBoard = useLeaderboard((s) => s.setOpen);
+  const identity = useLeaderboard((s) => s.identity);
+  const queued = useLeaderboard((s) => Object.keys(s.outbox).length);
   /**
    * Gone the moment you commit to anything. Two of these three panels are
    * mastery by another name, so leaving them clickable mid-drill would be a
@@ -34,6 +39,29 @@ export function RightRail(): JSX.Element | null {
 
   return (
     <div className="rail-r">
+      {leaderboardConfigured() && (
+        <button
+          className="stats-ro"
+          type="button"
+          aria-label="Leaderboard — click for the boards"
+          onClick={() => openBoard(true)}
+        >
+          <p className="lb">
+            Leaderboard <i>click for the boards</i>
+          </p>
+          <p>
+            <span>You</span>
+            <span>
+              {identity ? (
+                <b>{identity.name}</b>
+              ) : (
+                <>anonymous{queued > 0 ? <> · <b>{queued}</b> waiting</> : null}</>
+              )}
+            </span>
+          </p>
+        </button>
+      )}
+
       <button
         className="stats-ro"
         type="button"

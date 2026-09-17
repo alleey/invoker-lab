@@ -1,7 +1,7 @@
 /**
  * Live DOM handles for things the render loop writes every frame.
  *
- * A deliberate escape hatch from React. The session bar, the shot clock and the
+ * A deliberate escape hatch from React. The session bar, the spell time and the
  * countdown change sixty times a second; routing that through state would
  * re-render the whole tree for a stripe. Components register their node on
  * mount, the loop writes to it directly, and React never hears about it.

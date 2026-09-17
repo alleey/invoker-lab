@@ -169,7 +169,7 @@ export function ModeBrief(): JSX.Element | null {
           )}
           {c.spellTimeoutOptions.length > 0 && (
             <Seg
-              label="Shot clock"
+              label="Spell time"
               options={c.spellTimeoutOptions}
               value={timeouts[mode] || c.defaultSpellTimeout}
               onPick={(v) => setSpellTimeout(mode, v)}
@@ -200,7 +200,8 @@ export function ModeBrief(): JSX.Element | null {
             {PRACTICE.label}
           </button>
           <p className="n">
-            {PRACTICE.label} is not {c.label} practice — nothing is drawn, timed or scored.
+            Practice is not a run of {c.label} — nothing is drawn, timed or scored. Just the orbs and the two
+            slots.
           </p>
         </div>
       </div>

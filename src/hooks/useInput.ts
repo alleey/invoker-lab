@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ACTIONS, mouseCode, RESERVED_CODES, type Action } from '../engine/bindings';
+import { useLeaderboard } from '../leaderboardStore';
 import { useStore } from '../store';
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -93,10 +94,13 @@ export function useInput(): void {
          sits here so every branch below — orbs, casts, Space, Escape — is
          covered once rather than each remembering to check. */
       if (store.paused) {
-        if (e.code === 'Escape') {
-          e.preventDefault();
-          store.togglePause();
+        e.preventDefault();
+        // A three count every run gets tiresome when you are grinding them.
+        if (store.starting) {
+          if (e.code === 'Space' || e.code === 'Enter') store.endPause(performance.now());
+          return;
         }
+        if (e.code === 'Escape') store.togglePause();
         return;
       }
 
@@ -105,7 +109,8 @@ export function useInput(): void {
       // Escape unwinds one layer at a time, innermost first.
       if (e.code === 'Escape') {
         e.preventDefault();
-        if (onPage) store.setPage(null);
+        if (useLeaderboard.getState().open) useLeaderboard.getState().setOpen(false);
+        else if (onPage) store.setPage(null);
         else if (store.result) store.dismissResult();
         else if (store.practicing) store.setPracticing(false);
         else store.clearOrbs();
