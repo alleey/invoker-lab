@@ -1,5 +1,5 @@
 import { MODES, PRACTICE } from '../engine/modes';
-import { mins, pct, sec, tier } from '../engine/format';
+import { mins, pct, scoreUnit, sec, tier } from '../engine/format';
 import { accuracy, attempts, averageMs, statFor, weakestSpells } from '../engine/stats';
 import { useStore, WEAK_POOL_SIZE } from '../store';
 import { Kbd } from './Kbd';
@@ -124,9 +124,7 @@ export function ModeBrief(): JSX.Element | null {
             <dd>
               {best > 0 ? (
                 <>
-                  {best}
-                  {c.scoreBy === 'efficiency' ? '%' : ''}{' '}
-                  <small>{c.scoreBy === 'streak' ? 'longest streak' : c.scoreBy === 'efficiency' ? 'routed at par' : 'spells landed'}</small>
+                  {best} <small>{scoreUnit(c.scoreBy)}</small>
                 </>
               ) : (
                 'nothing recorded yet'
@@ -158,6 +156,7 @@ export function ModeBrief(): JSX.Element | null {
       </div>
 
       <div className="brief-side">
+        {!c.fixed && (
         <div className="opts">
           {c.durationOptions.length > 0 && (
             <Seg
@@ -189,8 +188,9 @@ export function ModeBrief(): JSX.Element | null {
             </span>
           </div>
         </div>
+        )}
 
-        <WeakestStrip inPlay={focusWeak} />
+        {!c.fixed && <WeakestStrip inPlay={focusWeak} />}
 
         <div className="brief-go">
           <button className="begin" type="button" onClick={() => start()}>

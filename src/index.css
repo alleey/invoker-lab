@@ -429,11 +429,64 @@ table.st{width:100%;border-collapse:collapse}
 .mastery-foot{position:absolute;left:34px;right:34px;bottom:30px;display:flex;justify-content:space-between;
   align-items:center;gap:12px 26px;flex-wrap:wrap;color:var(--dim);line-height:1.6}
 .mastery-foot b{color:var(--bone);font-weight:600}
-.mastery-key{display:flex;align-items:center;gap:7px;color:var(--dimmer);font-size:11px}
-.mastery-key i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-left:9px}
-.mastery-key i:first-child{margin-left:0}
-.mastery-key i.solid{background:var(--quas)}.mastery-key i.ok{background:var(--gold)}
-.mastery-key i.weak{background:var(--blood)}.mastery-key i.none{border:1px dashed var(--brass-line)}
-.mastery-notes{position:absolute;left:34px;bottom:88px;width:min(300px,26vw);color:var(--dim);line-height:1.6}
-.mastery-notes p{margin:0 0 8px}
-.mastery-notes b{color:var(--bone);font-weight:600;display:block}
+
+/* personal bests, one per mode — a record you can see is a record you chase */
+.records{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px;margin:0 0 16px}
+.rec{border:1px solid var(--brass-faint);padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.rec span{font-family:'Syncopate',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dimmer)}
+.rec b{font-size:22px;font-weight:600;line-height:1.2;color:var(--dimmer);font-variant-numeric:tabular-nums}
+.rec i{font-style:normal;font-size:11px;color:var(--dimmer)}
+.rec.set{border-color:var(--brass-line)}
+.rec.set b{color:var(--gold)}
+
+/* Sits against the foot of the constellation, not the foot of the window, so it
+   reads as a caption to the stars at any viewport. --cbot is the lowest node
+   row; the offset clears that row's name and number. */
+
+/* ── mastery: the panel under the stars ──
+   Anchored to --cbot, the constellation's lowest corner, so it hangs off the
+   chart at any viewport instead of drifting with the window edge. */
+.mastery-panel{position:absolute;left:var(--cx,50%);top:calc(var(--cbot,60%) + 132px);translate:-50% 0;
+  display:flex;flex-direction:column;align-items:center;gap:14px;width:max-content;max-width:calc(100vw - 68px)}
+.mastery-hint{margin:0;display:flex;align-items:center;gap:16px;white-space:nowrap;color:var(--dimmer);
+  font-family:'Syncopate',sans-serif;font-size:11px;letter-spacing:.22em;text-transform:uppercase}
+.mastery-hint::before,.mastery-hint::after{content:'';width:clamp(30px,7vw,90px);height:1px}
+.mastery-hint::before{background:linear-gradient(90deg,transparent,var(--brass-line))}
+.mastery-hint::after{background:linear-gradient(90deg,var(--brass-line),transparent)}
+
+/* Ten bars, worst first. The lattice says where a spell sits; this says how
+   they compare, which rings scattered round a triangle cannot show at a glance. */
+.accb.none .accb.on 
+/* the key, as swatches that match the bars rather than loose dots */
+.mastery-key{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.keyi{display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid var(--brass-faint);
+  color:var(--dimmer);font-size:11px;white-space:nowrap}
+.keyi i{display:block;width:4px;height:13px;border-radius:2px;background:var(--bar)}
+.keyi.solid{--bar:var(--quas)}.keyi.ok{--bar:var(--gold)}.keyi.weak{--bar:var(--blood)}
+.keyi.none i{background:none;border-left:1px dashed var(--brass-line)}
+
+/* Ten spells as one rising line, weakest first — the shape of your mastery,
+   which ten separate rings around a triangle cannot show. */
+.accg{display:flex;flex-direction:column;align-items:center;gap:4px;max-width:100%}
+.accl{display:block;max-width:100%;height:auto;overflow:visible}
+.accl-grid{stroke:rgba(184,147,74,.1);stroke-width:1}
+.accl-line{fill:none;stroke:var(--brass);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+.accl-line.dash{stroke:rgba(184,147,74,.45);stroke-dasharray:3 4}
+.accl-pt text{font-family:'IBM Plex Mono',monospace;font-size:11px;fill:var(--dimmer)}
+.accl-pt circle{fill:var(--ground);stroke:var(--pt,var(--brass));stroke-width:1.8;transition:r .15s}
+.accl-pt.solid{--pt:var(--quas)}.accl-pt.ok{--pt:var(--gold)}.accl-pt.weak{--pt:var(--blood)}
+.accl-pt.none circle{stroke-dasharray:2 2}
+.accl-pt.on circle{fill:var(--pt,var(--brass));filter:drop-shadow(0 0 7px var(--pt,var(--brass)))}
+.accl-pt.on text{fill:var(--bone)}
+.accg-icons{display:flex;gap:8px;max-width:100%}
+.acci{width:38px;display:grid;place-items:center;padding:0;background:none;border:0;opacity:.55;transition:opacity .15s}
+.acci:hover,.acci.on{opacity:1}
+
+/* The selected dot breathes like its star does, so the two read as one thing. */
+@keyframes ptPulse{0%,100%{filter:drop-shadow(0 0 4px var(--pt,var(--brass)))}50%{filter:drop-shadow(0 0 11px var(--pt,var(--brass)))}}
+.accl-pt.on circle{animation:ptPulse 1.4s ease-in-out infinite}
+
+/* the lookahead: what is coming, set apart from what you owe now */
+.chain-sep{display:block;width:1px;height:18px;background:var(--brass-line);margin:0 4px}
+.chain span.next{opacity:.5;border-style:dashed}
+.chain span.next .sicon{filter:grayscale(.35)}

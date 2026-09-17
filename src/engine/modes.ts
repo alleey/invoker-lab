@@ -1,6 +1,6 @@
 import type { Orb } from './spells';
 
-export type ModeId = 'rapid' | 'combo' | 'efficient' | 'crucible' | 'practice';
+export type ModeId = 'rapid' | 'combo' | 'efficient' | 'crucible' | 'daredevil' | 'practice';
 
 /** What the drill tells you about the spell you owe it. */
 export type Reveal = 'name' | 'sigil' | 'none';
@@ -16,8 +16,12 @@ export interface ModeExample {
   wasteful: { orbs: readonly Orb[]; note: string };
 }
 
-/** What a mode's score actually is. Professional is scored on its routing. */
-export type ScoreBy = 'casts' | 'streak' | 'efficiency';
+/**
+ * What a mode's score actually is — the one number its record is kept on.
+ * Each mode keeps the number it is really about, so a personal best means
+ * something specific rather than "you played for longer".
+ */
+export type ScoreBy = 'casts' | 'streak' | 'efficientSpells';
 
 export interface Mode {
   id: ModeId;
@@ -54,6 +58,12 @@ export interface Mode {
   defaultSpellTimeout: number;
   /** Move on after a failure instead of making you fix it. */
   advanceOnMiss: boolean;
+  /** A single miss ends the run outright. */
+  endOnMiss: boolean;
+  /** A single wasted keypress ends the run outright. */
+  endOnWaste: boolean;
+  /** Nothing is configurable — the constraints are the mode. */
+  fixed: boolean;
   /** Which of the run's numbers is the headline on the results page. */
   scoreBy: ScoreBy;
   example?: ModeExample;
@@ -82,7 +92,10 @@ export const MODES: Record<ModeId, Mode> = {
     spellTimeoutOptions: [],
     defaultSpellTimeout: 0,
     advanceOnMiss: false,
-    scoreBy: 'casts',
+    scoreBy: 'streak',
+    endOnMiss: false,
+    endOnWaste: false,
+    fixed: false,
   },
   combo: {
     id: 'combo',
@@ -105,7 +118,10 @@ export const MODES: Record<ModeId, Mode> = {
     spellTimeoutOptions: [],
     defaultSpellTimeout: 0,
     advanceOnMiss: false,
-    scoreBy: 'casts',
+    scoreBy: 'streak',
+    endOnMiss: false,
+    endOnWaste: false,
+    fixed: false,
   },
   efficient: {
     id: 'efficient',
@@ -117,7 +133,7 @@ export const MODES: Record<ModeId, Mode> = {
       'The whole chain is judged against its shortest possible route — not each spell on its own.',
     ],
     scoring:
-      'Par covers the entire chain, so pre-invoking and orb carry-over count as the savings they are. Your score is the share of chains you routed perfectly.',
+      'Par covers the entire chain, so pre-invoking and orb carry-over count as the savings they are. Your score is how many spells you landed by the shortest route.',
     ends: 'When the clock runs out.',
     reveal: 'name',
     comboSizes: [2, 3, 4],
@@ -128,7 +144,10 @@ export const MODES: Record<ModeId, Mode> = {
     spellTimeoutOptions: [],
     defaultSpellTimeout: 0,
     advanceOnMiss: false,
-    scoreBy: 'efficiency',
+    scoreBy: 'efficientSpells',
+    endOnMiss: false,
+    endOnWaste: false,
+    fixed: false,
     example: {
       setup: 'You have just cast Chaos Meteor, so you are still holding Wex, Exort, Exort.',
       ask: 'Next in the chain is Sun Strike — three Exort.',
@@ -162,7 +181,35 @@ export const MODES: Record<ModeId, Mode> = {
     spellTimeoutOptions: [1_000, 2_000, 3_000],
     defaultSpellTimeout: 2_000,
     advanceOnMiss: true,
+    scoreBy: 'casts',
+    endOnMiss: false,
+    endOnWaste: false,
+    fixed: false,
+  },
+  daredevil: {
+    id: 'daredevil',
+    label: 'Dare Devil',
+    goal: 'Keep a perfect run alive. One second a spell, and one mistake of any kind ends it.',
+    steps: [
+      'A spell appears with one second on it. No settings, no session clock.',
+      'Land it — and land it by the shortest route from where you stand.',
+      'A wrong cast, a wasted keypress or a second gone all end the run there.',
+    ],
+    scoring: 'Your score is how many you landed before it ended.',
+    ends: 'On your first mistake. Nothing else stops it.',
+    reveal: 'name',
+    comboSizes: [1],
+    durationOptions: [],
+    defaultDuration: 0,
+    bonusMs: 0,
+    trackEfficiency: true,
+    spellTimeoutOptions: [],
+    defaultSpellTimeout: 1_000,
+    advanceOnMiss: false,
     scoreBy: 'streak',
+    endOnMiss: true,
+    endOnWaste: true,
+    fixed: true,
   },
   practice: {
     id: 'practice',
@@ -185,6 +232,9 @@ export const MODES: Record<ModeId, Mode> = {
     defaultSpellTimeout: 0,
     advanceOnMiss: false,
     scoreBy: 'casts',
+    endOnMiss: false,
+    endOnWaste: false,
+    fixed: false,
   },
 };
 
@@ -196,7 +246,7 @@ export const MODES: Record<ModeId, Mode> = {
  * free-casting sandbox, reachable from inside any mode, and listing it beside
  * the four drills said the opposite.
  */
-export const MODE_ORDER: readonly ModeId[] = ['rapid', 'combo', 'crucible', 'efficient'];
+export const MODE_ORDER: readonly ModeId[] = ['rapid', 'combo', 'crucible', 'efficient', 'daredevil'];
 
 /** The sandbox's copy. Not a mode you can select — see MODE_ORDER. */
 export const PRACTICE = MODES.practice;

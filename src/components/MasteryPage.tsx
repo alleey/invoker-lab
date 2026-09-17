@@ -1,16 +1,88 @@
-import { pct } from '../engine/format';
-import { SPELLS } from '../engine/spells';
-import { accuracy, attempts, statFor, summarise, weakestSpells } from '../engine/stats';
-import { useStore, WEAK_POOL_SIZE } from '../store';
+import { pct, tier } from '../engine/format';
+import { SPELLS, type Spell } from '../engine/spells';
+import { accuracy, attempts, statFor, summarise } from '../engine/stats';
+import { useStore } from '../store';
+import { SpellIcon } from './SpellIcon';
+
+interface Bar {
+  spell: Spell;
+  acc: number | null;
+  n: number;
+}
+
+/** The accuracy bands, as the chart and the key both read them. */
+const BANDS: { cls: string; label: string }[] = [
+  { cls: 'solid', label: '90%+' },
+  { cls: 'ok', label: '70–89%' },
+  { cls: 'weak', label: 'under 70%' },
+  { cls: 'none', label: 'never cast' },
+];
 
 /**
- * The star chart as a record of you rather than a board to play on.
- *
- * Deliberately chrome only: the chart itself is the Stage's canvas underneath,
- * so everything here is `pointer-events: none` except the parts you can click.
- * Let this section eat pointer events and hover stops reaching the stars, which
- * is the entire point of the page.
+ * Ten spells, worst first. The stars say where each one sits on the lattice;
+ * this says how they compare, which a scatter of rings around a triangle can
+ * never show at a glance.
  */
+const COL = 38;
+const GAP = 8;
+const PLOT_H = 88;
+/** Room above the highest point for its percentage. */
+const PAD_T = 16;
+const W = 10 * COL + 9 * GAP;
+const H = PLOT_H + PAD_T;
+const cxOf = (i: number): number => i * (COL + GAP) + COL / 2;
+/** A never-cast spell has no accuracy, so it rides the floor. */
+const cyOf = (acc: number | null): number => PAD_T + PLOT_H - (acc ?? 0) * (PLOT_H - 6) - 3;
+
+function AccuracyGraph({ bars }: { bars: Bar[] }): JSX.Element {
+  const select = useStore((s) => s.setSelected);
+  const selected = useStore((s) => s.selected);
+
+  const pts = bars.map((b, i) => ({ ...b, x: cxOf(i), y: cyOf(b.acc) }));
+  /* Two runs, because a spell you have never cast is not a spell you score
+     zero on. The untested head of the line is dashed along the floor; the
+     solid line starts at the first spell you have actually attempted. */
+  const firstReal = pts.findIndex((p) => p.acc !== null);
+  const dashed = firstReal < 0 ? pts : pts.slice(0, firstReal + 1);
+  const solid = firstReal < 0 ? [] : pts.slice(firstReal);
+  const path = (list: typeof pts) => list.map((p) => `${p.x},${p.y}`).join(' ');
+
+  return (
+    <div className="accg" role="group" aria-label="Accuracy by spell, weakest first">
+      <svg className="accl" viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true">
+        {[0, 0.5, 1].map((g) => (
+          <line key={g} className="accl-grid" x1="0" x2={W} y1={cyOf(g)} y2={cyOf(g)} />
+        ))}
+        {dashed.length > 1 && <polyline className="accl-line dash" points={path(dashed)} />}
+        {solid.length > 1 && <polyline className="accl-line" points={path(solid)} />}
+        {pts.map((p) => (
+          <g key={p.spell.id} className={`accl-pt ${p.acc === null ? 'none' : tier(p.acc)}${selected?.id === p.spell.id ? ' on' : ''}`}>
+            <text x={p.x} y={p.y - 9} textAnchor="middle">
+              {p.acc === null ? '—' : pct(p.acc)}
+            </text>
+            <circle cx={p.x} cy={p.y} r={selected?.id === p.spell.id ? 4.5 : 3.2} />
+          </g>
+        ))}
+      </svg>
+
+      <div className="accg-icons">
+        {bars.map(({ spell, acc, n }) => (
+          <button
+            key={spell.id}
+            type="button"
+            className={`acci${selected?.id === spell.id ? ' on' : ''}`}
+            onClick={() => select(spell)}
+            title={`${spell.name} — ${acc === null ? 'never cast' : `${pct(acc)} of ${n}`}`}
+            aria-label={`${spell.name}, ${acc === null ? 'never cast' : `${pct(acc)} of ${n}`}`}
+          >
+            <SpellIcon spell={spell} size={22} />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function MasteryPage(): JSX.Element {
   const open = useStore((s) => s.masteryOpen);
   const stats = useStore((s) => s.stats);
@@ -19,23 +91,33 @@ export function MasteryPage(): JSX.Element {
   if (!open) return <section className="masterypage" aria-hidden="true" />;
 
   const life = summarise(stats.spells);
-  const weak = new Set(weakestSpells(stats, WEAK_POOL_SIZE).map((s) => s.id));
-  const untested = SPELLS.filter((s) => attempts(statFor(stats, s.id)) === 0);
-  const solid = SPELLS.filter((s) => {
-    const a = accuracy(statFor(stats, s.id));
-    return a !== null && a >= 0.9;
-  });
+  const bars: Bar[] = SPELLS.map((spell) => {
+    const stat = statFor(stats, spell.id);
+    return { spell, acc: accuracy(stat), n: attempts(stat) };
+  }).sort((a, b) => (a.acc ?? -1) - (b.acc ?? -1) || b.n - a.n);
 
   return (
     <section className="masterypage on">
       <div className="kb-head">
         <p className="eb">Mastery</p>
         <h2>Every spell, where you stand</h2>
-        <p>Hover a star for its detail.</p>
       </div>
       <button className="btn kb-done" type="button" onClick={() => setPage(null)}>
         Done · Esc
       </button>
+
+      <div className="mastery-panel">
+        <p className="mastery-hint">Click a star or a bar for its detail</p>
+        <AccuracyGraph bars={bars} />
+        <div className="mastery-key">
+          {BANDS.map((b) => (
+            <span key={b.cls} className={`keyi ${b.cls}`}>
+              <i />
+              {b.label}
+            </span>
+          ))}
+        </div>
+      </div>
 
       <div className="mastery-foot">
         <span>
@@ -52,29 +134,9 @@ export function MasteryPage(): JSX.Element {
               · <b>{pct(stats.chainsOptimal / stats.chains)}</b> routed by the shortest keys
             </>
           )}
+          {' '}
+          · <b>{stats.drills}</b> drill{stats.drills === 1 ? '' : 's'}
         </span>
-        <span className="mastery-key">
-          <i className="solid" /> 90%+ <i className="ok" /> 70%+ <i className="weak" /> under 70% <i className="none" />{' '}
-          never cast
-        </span>
-      </div>
-
-      <div className="mastery-notes">
-        {untested.length > 0 && (
-          <p>
-            <b>{untested.length} never cast.</b> {untested.map((s) => s.name).join(', ')}.
-          </p>
-        )}
-        {weak.size > 0 && (
-          <p>
-            <b>Weakest {WEAK_POOL_SIZE}</b> {SPELLS.filter((s) => weak.has(s.id)).map((s) => s.name).join(', ')}.
-          </p>
-        )}
-        {solid.length > 0 && (
-          <p>
-            <b>Solid at 90%+</b> {solid.map((s) => s.name).join(', ')}.
-          </p>
-        )}
       </div>
     </section>
   );

@@ -136,6 +136,8 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
       geo = geom(W, H);
       // The altar and the chain hang off the constellation's centre, not the viewport's.
       document.documentElement.style.setProperty('--cx', `${geo.cx}px`);
+      const foot = Math.max(geo.Q[1], geo.W[1], geo.E[1]);
+      document.documentElement.style.setProperty('--cbot', `${foot}px`);
       if (!embers.length) embers = Array.from({ length: EMBERS }, () => spawn(true));
       const p = markerTarget(geo, useStore.getState().orbs);
       mx = p[0];
@@ -326,7 +328,7 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
         const isT = !!target && sp.id === target.id;
         // No mastery on hover mid-drill: it is a distraction dressed as help,
         // and the one number that matters right then is the shot clock.
-        const isH = S.hovered?.id === sp.id && !S.running && !S.paused;
+        const isH = S.selected?.id === sp.id && !S.running && !S.paused;
         const hex = hexFor(sp);
         const li = S.slots.findIndex((x) => x && x.id === sp.id);
         const cost = li >= 0 ? 0 : optimalRoute(S.orbs, sp.orbs).length;
@@ -395,11 +397,19 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
           }
         }
         if (isH) {
-          ctx.strokeStyle = 'rgba(235,225,204,.8)';
-          ctx.lineWidth = 1;
+          ctx.strokeStyle = 'rgba(235,225,204,.85)';
+          ctx.lineWidth = 1.2;
           ctx.beginPath();
           ctx.arc(p[0], p[1], 18 * NS, 0, 7);
           ctx.stroke();
+          for (let j = 0; j < 2; j++) {
+            const q = (t / 1400 + j * 0.5) % 1;
+            ctx.strokeStyle = rgba('#ebe1cc', (1 - q) * 0.6);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(p[0], p[1], (18 + q * 26) * NS, 0, 7);
+            ctx.stroke();
+          }
         }
 
         const words = sp.name.toUpperCase().split(' ');
@@ -532,15 +542,16 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
       raf = requestAnimationFrame(tick);
     };
 
-    /* Hover: nearest node within reach of the cursor.
-       Only where a star page is welcome — the mastery chart and the sandbox.
-       Mid-drill it is suppressed outright rather than merely hidden, so the
-       node under a resting cursor does not light up either. */
-    const onMove = (e: PointerEvent) => {
+    /* Click the nearest node within reach of the pointer; click open space to
+       let it go. Deliberately not hover — the card can be taller than a short
+       window, and you cannot hold a hover while scrolling the thing you are
+       hovering. Only where a star page is welcome: the mastery chart and the
+       sandbox, never mid-drill. */
+    const onPick = (e: PointerEvent) => {
       const S = useStore.getState();
       const welcome = S.masteryOpen || (S.practicing && !S.kbOpen && !S.statsOpen);
       if (!geo || S.paused || !welcome) {
-        if (S.hovered) S.setHovered(null);
+        if (S.selected) S.setSelected(null);
         return;
       }
       const r = stage.getBoundingClientRect();
@@ -556,22 +567,19 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
           best = nd.spell;
         }
       }
-      S.setHovered(best);
+      S.setSelected(best);
     };
-    const onLeave = () => useStore.getState().setHovered(null);
 
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(stage);
-    stage.addEventListener('pointermove', onMove);
-    stage.addEventListener('pointerleave', onLeave);
+    stage.addEventListener('click', onPick);
     raf = requestAnimationFrame(tick);
 
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
-      stage.removeEventListener('pointermove', onMove);
-      stage.removeEventListener('pointerleave', onLeave);
+      stage.removeEventListener('click', onPick);
     };
   }, []);
 

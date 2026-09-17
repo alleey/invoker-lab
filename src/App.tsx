@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Altar } from './components/Altar';
 import { CrashNotice } from './components/CrashNotice';
-import { HoverCard } from './components/HoverCard';
+import { StarCard } from './components/StarCard';
 import { KeyboardPage } from './components/KeyboardPage';
 import { LeftRail } from './components/LeftRail';
 import { MasteryPage } from './components/MasteryPage';
@@ -68,7 +68,7 @@ export function App(): JSX.Element {
       <PracticeBar />
       <StageBar />
       <LeftRail />
-      <HoverCard />
+      <StarCard />
       <RightRail />
       {board && !onPage && <Altar />}
       <Verdict />

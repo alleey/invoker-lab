@@ -24,3 +24,7 @@ export const dark = (hex: string): string => {
   const d = (v: number) => Math.round(v * 0.3);
   return `rgb(${d((n >> 16) & 255)},${d((n >> 8) & 255)},${d(n & 255)})`;
 };
+
+/** What a mode's score counts, in the player's words. */
+export const scoreUnit = (by: 'casts' | 'streak' | 'efficientSpells'): string =>
+  by === 'streak' ? 'longest streak' : by === 'efficientSpells' ? 'spells at par' : 'spells landed';

@@ -1,5 +1,5 @@
 import { type CSSProperties } from 'react';
-import { mins, sec, tier } from '../engine/format';
+import { mins, scoreUnit, sec, tier } from '../engine/format';
 import { MODES } from '../engine/modes';
 import { SPELL_BY_ID, type Spell } from '../engine/spells';
 import { useStore, type CastLog } from '../store';
@@ -56,12 +56,7 @@ export function ResultsView(): JSX.Element {
   const weak = rows.filter((p) => p.misses > 0).sort((a, b) => accOf(a) - accOf(b))[0];
 
   const chains = c.comboSizes.some((n) => n > 1);
-  const unit =
-    c.scoreBy === 'efficiency'
-      ? 'of chains routed perfectly'
-      : c.scoreBy === 'streak'
-        ? 'longest streak'
-        : 'spells landed';
+  const unit = scoreUnit(c.scoreBy);
   const log = logs[mode] ?? [];
   const peak = Math.max(1, ...log);
 
@@ -74,7 +69,6 @@ export function ResultsView(): JSX.Element {
         </p>
         <div className="score">
           {result.score}
-          {c.scoreBy === 'efficiency' && <span style={{ fontSize: '.4em' }}>%</span>}
           <small>{unit}</small>
         </div>
         <p className="res-line">

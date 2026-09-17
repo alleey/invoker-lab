@@ -69,7 +69,6 @@ export function RightRail(): JSX.Element | null {
                 <b>{MODES[lastRun.mode].label}</b> ·{' '}
                 <b>
                   {lastRun.score}
-                  {MODES[lastRun.mode].scoreBy === 'efficiency' ? '%' : ''}
                 </b>{' '}
                 · {lastRun.hits} of {lastRun.hits + lastRun.misses} landed
               </>
@@ -92,9 +91,9 @@ export function RightRail(): JSX.Element | null {
         </p>
       </button>
 
-      <button className="binds" type="button" aria-label="Bindings — click to change" onClick={() => setPage('keyboard')}>
+      <button className="binds" type="button" aria-label="Hotkeys — click to change" onClick={() => setPage('keyboard')}>
         <p className="lb">
-          Bindings <i>{preset ? preset.label : 'custom'} · click to change</i>
+          Hotkeys <i>{preset ? preset.label : 'custom'} · click to change</i>
         </p>
         <ul>
           {ACTIONS.map((a) => (

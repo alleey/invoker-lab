@@ -218,6 +218,8 @@ interface State {
   chainPar: number;
   /** Keys spent since this chain began — pre-invoking included. */
   chainPresses: number;
+  /** The challenge after this one, drawn early so it can be shown and planned for. */
+  nextCombo: Spell[];
   /** When the current spell's shot clock expires. 0 means it never does. */
   spellEndsAt: number;
   spellTimeoutMs: number;
@@ -232,6 +234,8 @@ interface State {
   /** Efficiency is judged per chain, never per spell — see engine/planner.ts. */
   optimalChains: number;
   judgedChains: number;
+  /** Spells that were part of a chain routed at par — what Professional scores. */
+  optimalSpells: number;
 
   verdict: Verdict;
   result: DrillResult | null;
@@ -249,8 +253,12 @@ interface State {
   flash: { action: Action; id: number } | null;
 
   /* ── surfaces the constellation UI owns ── */
-  /** The star under the cursor, which drives the detail card. */
-  hovered: Spell | null;
+  /**
+    * The star you picked, which drives the detail card. Chosen by click, not by
+    * hover: on a short window the card itself scrolls, and you cannot hold a
+    * hover and scroll it at the same time.
+    */
+  selected: Spell | null;
   kbOpen: boolean;
   statsOpen: boolean;
   masteryOpen: boolean;
@@ -268,7 +276,7 @@ interface State {
   casts: CastLog[];
   lastRun: LastRun | null;
 
-  setHovered(spell: Spell | null): void;
+  setSelected(spell: Spell | null): void;
   setPage(page: Page): void;
   setPracticing(on: boolean): void;
   togglePause(): void;
@@ -331,14 +339,31 @@ export const useStore = create<State>()((set, get) => {
     orbs: readonly Orb[],
     slots: Slots,
     timeoutMs: number,
+    sizes: readonly number[],
+    pool: readonly Spell[],
   ): Pick<
     State,
-    'combo' | 'step' | 'par' | 'shownAt' | 'presses' | 'spellEndsAt' | 'chainPar' | 'chainPresses'
+    | 'combo'
+    | 'step'
+    | 'par'
+    | 'shownAt'
+    | 'presses'
+    | 'spellEndsAt'
+    | 'chainPar'
+    | 'chainPresses'
+    | 'nextCombo'
   > => ({
     ...aim(combo, 0, orbs, slots, timeoutMs),
     chainPar: optimalChainCost(combo, orbs, slots),
     chainPresses: 0,
+    // Drawn now rather than when it is needed, so the board can show you what
+    // is coming and you can stack for it while the current spell is still up.
+    nextCombo: drawCombo(sizes, combo[combo.length - 1] ?? null, pool),
   });
+
+  /** Whatever was shown as coming next, or a fresh draw if nothing was. */
+  const takeNext = (queued: Spell[], sizes: readonly number[], prev: Spell | null, pool: Spell[]): Spell[] =>
+    queued.length ? queued : drawCombo(sizes, prev, pool);
 
   /** Narrowed to your weakest spells when the filter is on, otherwise everything. */
   const drawPool = (focusWeak: boolean, stats: Stats): Spell[] =>
@@ -368,6 +393,7 @@ export const useStore = create<State>()((set, get) => {
     presses: 0,
     chainPar: 0,
     chainPresses: 0,
+    nextCombo: [],
     spellEndsAt: 0,
     spellTimeoutMs: 0,
 
@@ -379,6 +405,7 @@ export const useStore = create<State>()((set, get) => {
     timeTotal: 0,
     optimalChains: 0,
     judgedChains: 0,
+    optimalSpells: 0,
 
     verdict: IDLE,
     result: null,
@@ -390,7 +417,7 @@ export const useStore = create<State>()((set, get) => {
     shake: 0,
     flash: null,
 
-    hovered: null,
+    selected: null,
     kbOpen: false,
     statsOpen: false,
     masteryOpen: false,
@@ -402,8 +429,8 @@ export const useStore = create<State>()((set, get) => {
     casts: [],
     lastRun: null,
 
-    setHovered(spell) {
-      if (get().hovered?.id !== spell?.id) set({ hovered: spell });
+    setSelected(spell) {
+      if (get().selected?.id !== spell?.id) set({ selected: spell });
     },
 
     /** Only one full-screen surface at a time, so they cannot stack. */
@@ -412,7 +439,7 @@ export const useStore = create<State>()((set, get) => {
         kbOpen: page === 'keyboard',
         statsOpen: page === 'stats',
         masteryOpen: page === 'mastery',
-        hovered: null,
+        selected: null,
       });
     },
 
@@ -422,7 +449,7 @@ export const useStore = create<State>()((set, get) => {
      * already in hand.
      */
     setPracticing(on) {
-      set({ practicing: on, orbs: [], slots: EMPTY_SLOTS, verdict: IDLE, hovered: null });
+      set({ practicing: on, orbs: [], slots: EMPTY_SLOTS, verdict: IDLE, selected: null });
     },
 
     /**
@@ -473,6 +500,7 @@ export const useStore = create<State>()((set, get) => {
         combo: [],
         step: 0,
         par: null,
+        nextCombo: [],
         hits: 0,
         misses: 0,
         combos: 0,
@@ -481,6 +509,7 @@ export const useStore = create<State>()((set, get) => {
         timeTotal: 0,
         optimalChains: 0,
         judgedChains: 0,
+        optimalSpells: 0,
         verdict: IDLE,
         celebration: null,
         spellEndsAt: 0,
@@ -513,9 +542,11 @@ export const useStore = create<State>()((set, get) => {
       if (config.comboSizes.length === 0) return;
       const chosen = s.lengths[s.mode] || config.defaultDuration;
       const timed = isTimed(config);
+      /* A mode with no shot-clock choices can still have one — Dare Devil's
+         second is the mode, not a setting. Only a default of 0 means none. */
       const timeoutMs = config.spellTimeoutOptions.length
         ? s.timeouts[s.mode] || config.defaultSpellTimeout
-        : 0;
+        : config.defaultSpellTimeout;
       const pool = drawPool(s.prefs.focusWeak, s.stats);
       set({
         running: true,
@@ -533,6 +564,7 @@ export const useStore = create<State>()((set, get) => {
         timeTotal: 0,
         optimalChains: 0,
         judgedChains: 0,
+        optimalSpells: 0,
         endsAt: timed ? performance.now() + chosen : 0,
         runDurationMs: timed ? chosen : 0,
         sessionSpells: {},
@@ -544,7 +576,7 @@ export const useStore = create<State>()((set, get) => {
         pausesLeft: PAUSE_MAX,
         verdict: IDLE,
         celebration: null,
-        ...beginChain(drawCombo(config.comboSizes, null, pool), [], EMPTY_SLOTS, timeoutMs),
+        ...beginChain(drawCombo(config.comboSizes, null, pool), [], EMPTY_SLOTS, timeoutMs, config.comboSizes, pool),
       });
     },
 
@@ -569,8 +601,9 @@ export const useStore = create<State>()((set, get) => {
         streak: 0,
         shake: s.shake + 1,
         verdict: { text: `Out of time on ${target.name}.`, tone: 'bad' },
-        ...beginChain(drawCombo(config.comboSizes, target, s.pool), s.orbs, s.slots, s.spellTimeoutMs),
+        ...beginChain(takeNext(s.nextCombo, config.comboSizes, target, s.pool), s.orbs, s.slots, s.spellTimeoutMs, config.comboSizes, s.pool),
       });
+      if (config.endOnMiss) get().finish();
     },
 
     finish() {
@@ -583,9 +616,12 @@ export const useStore = create<State>()((set, get) => {
          dies on the unbroken run, Professional on how it routed, everything
          else on how much it landed. Comparing a run against its own mode's
          record only means something if they measure the same thing. */
-      const efficiencyPct = s.judgedChains ? Math.round((s.optimalChains / s.judgedChains) * 100) : 0;
       const score =
-        config.scoreBy === 'streak' ? s.bestStreak : config.scoreBy === 'efficiency' ? efficiencyPct : s.hits;
+        config.scoreBy === 'streak'
+          ? s.bestStreak
+          : config.scoreBy === 'efficientSpells'
+            ? s.optimalSpells
+            : s.hits;
       const isRecord = score > previousBest;
 
       const stats: Stats = {
@@ -605,6 +641,7 @@ export const useStore = create<State>()((set, get) => {
         combo: [],
         step: 0,
         par: null,
+        nextCombo: [],
         spellEndsAt: 0,
         stats,
         celebration: null,
@@ -718,11 +755,17 @@ export const useStore = create<State>()((set, get) => {
         };
         // Under a shot clock there is no second chance — the next spell is
         // already up. Everywhere else you stay on it until you get it right.
+        // A mode that ends on a miss has nothing to draw next; it just stops.
+        if (config.endOnMiss) {
+          set({ ...penalty, verdict: { text: `${spell.name}, not ${target.name}. Run over.`, tone: 'bad' } });
+          get().finish();
+          return;
+        }
         if (config.advanceOnMiss) {
           set({
             ...penalty,
             verdict: { text: `Wrong — that was ${spell.name}, not ${target.name}.`, tone: 'bad' },
-            ...beginChain(drawCombo(config.comboSizes, target, s.pool), s.orbs, s.slots, s.spellTimeoutMs),
+            ...beginChain(takeNext(s.nextCombo, config.comboSizes, target, s.pool), s.orbs, s.slots, s.spellTimeoutMs, config.comboSizes, s.pool),
           });
           return;
         }
@@ -818,6 +861,7 @@ export const useStore = create<State>()((set, get) => {
         combos: s.combos + 1,
         optimalChains: s.optimalChains + (config.trackEfficiency && optimal ? 1 : 0),
         judgedChains: s.judgedChains + (config.trackEfficiency ? 1 : 0),
+        optimalSpells: s.optimalSpells + (config.trackEfficiency && optimal ? s.combo.length : 0),
         celebration: {
           id: performance.now(),
           kind: isChain ? 'combo' : 'spell',
@@ -826,12 +870,16 @@ export const useStore = create<State>()((set, get) => {
           spellId: target.id,
         },
         ...beginChain(
-          drawCombo(config.comboSizes, target, s.pool),
+          takeNext(s.nextCombo, config.comboSizes, target, s.pool),
           s.orbs,
           s.slots,
           s.spellTimeoutMs,
+          config.comboSizes,
+          s.pool,
         ),
       });
+      // Landed, but over par — in a mode that allows no waste, that ends it too.
+      if (config.endOnWaste && config.trackEfficiency && !optimal) get().finish();
     },
 
     clearOrbs() {

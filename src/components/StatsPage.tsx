@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { keyLabel } from '../engine/bindings';
-import { pct, sec, tier } from '../engine/format';
-import { MODES } from '../engine/modes';
+import { pct, scoreUnit, sec, tier } from '../engine/format';
+import { MODE_ORDER, MODES } from '../engine/modes';
 import { SPELLS, type Spell } from '../engine/spells';
 import { highlights, statIn, summarise, weakestSpells, type SpellStats } from '../engine/stats';
 import { useStore, WEAK_POOL_SIZE, type CastLog } from '../store';
@@ -166,6 +166,23 @@ export function StatsPage(): JSX.Element {
           )}
         </p>
 
+        {/* Records are lifetime whichever scope is showing, and hiding them
+            behind the Overall tab meant nobody found them. */}
+        {(
+          <div className="records">
+            {MODE_ORDER.map((id) => {
+              const best = stats.modes[id] ?? 0;
+              return (
+                <div key={id} className={best > 0 ? 'rec set' : 'rec'}>
+                  <span>{MODES[id].label}</span>
+                  <b>{best > 0 ? best : '—'}</b>
+                  <i>{scoreUnit(MODES[id].scoreBy)}</i>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         <table className="st">
           <thead>
             <tr>
@@ -205,7 +222,7 @@ export function StatsPage(): JSX.Element {
         {view === 'life' && (
           <div className="st-foot">
             <span>
-              {stats.drills} drill{stats.drills === 1 ? '' : 's'} recorded · a reset never touches bindings
+              {stats.drills} drill{stats.drills === 1 ? '' : 's'} recorded
             </span>
             {armed ? (
               <span className="row">

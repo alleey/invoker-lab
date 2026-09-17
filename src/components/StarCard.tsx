@@ -37,11 +37,11 @@ function Spark({ times, avg }: { times: readonly number[]; avg: number }): JSX.E
 }
 
 /**
- * The page behind a star. It answers the two questions you actually have while
- * looking at one: what does it cost me from here, and how good am I at it.
+ * The page behind a star: what it costs you from here, and how good you are
+ * at it. Opened by clicking a node, closed by clicking open space.
  */
-export function HoverCard(): JSX.Element {
-  const spell = useStore((s) => s.hovered);
+export function StarCard(): JSX.Element {
+  const spell = useStore((s) => s.selected);
   // Welcome on the mastery chart and in the sandbox; never mid-drill.
   const welcome = useStore((s) => (s.masteryOpen || s.practicing) && !s.paused && !s.kbOpen && !s.statsOpen);
   const orbs = useStore((s) => s.orbs);
@@ -55,13 +55,14 @@ export function HoverCard(): JSX.Element {
   const acc = accuracy(stat);
   const avg = averageMs(stat);
   const par = parFor(orbs, slots, spell);
+  /* Only worth showing when the board actually holds something. With an empty
+     queue every spell prices the same — three presses, invoke, cast — so the
+     section would repeat one static answer ten times and teach nothing. */
+  const live = orbs.length > 0 || slots.some((s) => s !== null);
   const weak = weakestSpells(stats, WEAK_POOL_SIZE).some((s) => s.id === spell.id);
 
   return (
     <aside className="card on">
-      <p className="eb" style={{ color: 'var(--brass)' }}>
-        Star page
-      </p>
       <h3>{spell.name}</h3>
       <div className="sig">
         <Sigil orbs={spell.orbs} />
@@ -74,6 +75,7 @@ export function HoverCard(): JSX.Element {
       </div>
       <p className="tag">{spell.tag}</p>
 
+      {live && (
       <div className="sec">
         <p className="lb">From where you stand</p>
         <div className="from">
@@ -94,6 +96,7 @@ export function HoverCard(): JSX.Element {
           )}
         </div>
       </div>
+      )}
 
       <div className="sec">
         <p className="lb">Mastery</p>
