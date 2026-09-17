@@ -7,7 +7,7 @@ import react from '@vitejs/plugin-react';
  * Dev and the Tauri desktop target both load from the root instead.
  * Rename `REPO` if you name the GitHub repository something else.
  */
-const REPO = 'InvokerLab';
+const REPO = 'invoker-lab';
 
 export default defineConfig({
   plugins: [react()],
