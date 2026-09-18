@@ -15,6 +15,9 @@ const CELEB_MS = CELEB_STAGGER * 2 + CELEB_RING;
 /** Ring travel as a fraction of the triangle radius — small, so it stays home. */
 const CELEB_SPREAD = 0.225;
 const EMBERS = 120;
+/** Practice pace. Kept out of the reagent palette on purpose. */
+const TEMPO_FAST = '#5ce08a';
+const TEMPO_SLOW = '#ff5c6a';
 
 interface Ember {
   x: number;
@@ -463,6 +466,25 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
             ctx.drawImage(glow(cel.hex), p[0] - 60, p[1] - 60, 120, 120);
             ctx.globalAlpha = 1;
             ctx.globalCompositeOperation = 'source-over';
+            /* Practice pace, drawn where you are already looking. A border on
+               a panel below the chart is a glance away from the stars; this
+               rides the cast itself. */
+            if (sp && S.practicing && S.tempo && S.tempo !== 'steady') {
+              // Green and red, and nothing else uses either for anything.
+              const hex = S.tempo === 'fast' ? TEMPO_FAST : TEMPO_SLOW;
+              const lq = Math.min(age / CELEB_RING, 1);
+              ctx.strokeStyle = rgba(hex, (1 - lq) * 0.9);
+              ctx.lineWidth = 3 * (1 - lq) + 0.8;
+              ctx.beginPath();
+              ctx.arc(p[0], p[1], 13 * NS + lq * R * CELEB_SPREAD * 1.7, 0, 7);
+              ctx.stroke();
+              ctx.globalCompositeOperation = 'lighter';
+              ctx.globalAlpha = (1 - lq) * 0.35;
+              ctx.drawImage(glow(hex), p[0] - 70, p[1] - 70, 140, 140);
+              ctx.globalAlpha = 1;
+              ctx.globalCompositeOperation = 'source-over';
+            }
+
             if (sp) {
               for (let i = 0; i < sp.orbs.length; i++) {
                 const lq = (age - i * CELEB_STAGGER) / CELEB_RING;
@@ -562,6 +584,12 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
        hovering. Only where a star page is welcome: the mastery chart and the
        sandbox, never mid-drill. */
     const onPick = (e: PointerEvent) => {
+      /* Only a click on the bare chart counts. Every panel in the app is a
+         child of #stage, so without this the card's own buttons bubble up
+         here, hit-test as empty space and close the card underneath the click
+         that was meant for it. */
+      const t = e.target as HTMLElement | null;
+      if (t !== stage && t?.tagName !== 'CANVAS') return;
       const S = useStore.getState();
       const welcome = S.masteryOpen || (S.practicing && !S.kbOpen && !S.statsOpen);
       if (!geo || S.paused || !welcome) {
@@ -601,7 +629,63 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(stage);
+    /* Dragging a star onto the practice tray. The keyboard page binds keys the
+       same way, and pulling a spell out of the chart reads more like picking it
+       up than clicking a button in a side panel does. */
+    let drag: { spell: Spell; x0: number; y0: number; moved: boolean } | null = null;
+
+    const nodeAt = (cx: number, cy: number): Spell | null => {
+      if (!geo) return null;
+      let best: Spell | null = null;
+      let bestD = 34 * NS;
+      for (const nd of NODES) {
+        const p = geo.at(nd.q, nd.w, nd.e);
+        const d = Math.hypot(p[0] - cx, p[1] - cy);
+        if (d < bestD) {
+          bestD = d;
+          best = nd.spell;
+        }
+      }
+      return best;
+    };
+
+    const onDown = (e: PointerEvent) => {
+      const S = useStore.getState();
+      if (!S.practicing || S.kbOpen || S.statsOpen || S.masteryOpen) return;
+      const t = e.target as HTMLElement | null;
+      if (t !== stage && t?.tagName !== 'CANVAS') return;
+      const r = stage.getBoundingClientRect();
+      const spell = nodeAt(e.clientX - r.left, e.clientY - r.top);
+      if (spell) drag = { spell, x0: e.clientX, y0: e.clientY, moved: false };
+    };
+
+    const onDragMove = (e: PointerEvent) => {
+      if (!drag) return;
+      if (!drag.moved) {
+        if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) <= 6) return;
+        drag.moved = true;
+        useStore.getState().setDragging(drag.spell);
+      }
+      const zone = document
+        .elementFromPoint(e.clientX, e.clientY)
+        ?.closest('[data-chain-drop]') as HTMLElement | null;
+      document.querySelectorAll('[data-chain-drop]').forEach((el) => el.classList.toggle('over', el === zone));
+    };
+
+    const onUp = (e: PointerEvent) => {
+      const d = drag;
+      drag = null;
+      if (!d?.moved) return;
+      useStore.getState().setDragging(null);
+      const zone = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-chain-drop]');
+      document.querySelectorAll('[data-chain-drop]').forEach((el) => el.classList.remove('over'));
+      if (zone) useStore.getState().togglePracticeSpell(d.spell);
+    };
+
     stage.addEventListener('click', onPick);
+    stage.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointermove', onDragMove);
+    window.addEventListener('pointerup', onUp);
     raf = requestAnimationFrame(tick);
 
     return () => {
@@ -609,6 +693,9 @@ export function Stage({ children }: { children?: ReactNode }): JSX.Element {
       clearInterval(release);
       ro.disconnect();
       stage.removeEventListener('click', onPick);
+      stage.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onDragMove);
+      window.removeEventListener('pointerup', onUp);
     };
   }, []);
 

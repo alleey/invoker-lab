@@ -10,3 +10,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** Branch and short commit of this build, injected at build time. */
+declare const __BUILD_ID__: string;

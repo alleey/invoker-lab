@@ -62,6 +62,7 @@ export function TopBar(): JSX.Element {
         <div className="title">
           <h1>Invoker Lab</h1>
           <p>Arsenal Magus is hard to learn, harder still to master.</p>
+          <p className="ver">ver. {__BUILD_ID__}</p>
         </div>
 
         <nav className="modes" aria-label="Practice mode">

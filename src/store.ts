@@ -106,6 +106,21 @@ export const PAUSE_MAX = 3;
 /** The three count that opens a run, and the one that releases a pause. */
 export const COUNT_IN_MS = 3000;
 
+/**
+ * How far off your own pace a practice cast has to be before it is called out.
+ * Wide enough that ordinary variation stays quiet; change it here.
+ */
+export const TEMPO_BAND_MS = 150;
+
+/** Casts needed before there is a pace worth comparing against. */
+const TEMPO_MIN_SAMPLES = 3;
+
+/** How many spells can be pinned into a practice chain. */
+export const PRACTICE_CHAIN_MAX = 3;
+
+/** How a practice cast compared with your own pace for that spell. */
+export type Tempo = 'fast' | 'steady' | 'slow' | null;
+
 /** The full-screen surfaces. Only one is ever open, so they cannot stack. */
 export type Page = 'keyboard' | 'stats' | 'mastery' | null;
 
@@ -277,6 +292,25 @@ interface State {
   shake: number;
   flash: { action: Action; id: number } | null;
 
+  /**
+   * Practice cast times, per spell, for this session only.
+   *
+   * Deliberately not the lifetime average from drills. A drill time starts when
+   * the name appears, so it includes reading and recalling the spell; in
+   * practice you already know what you are casting, so practice casts are
+   * always faster and comparing the two would report "faster" forever. Your own
+   * practice pace is the only baseline that says anything.
+   */
+  practiceTimes: Record<string, number[]>;
+  /** When the current build began — first reagent since the last cast. */
+  practiceMark: number;
+  /** How the last practice cast compared with that pace. */
+  tempo: Tempo;
+  /** Pinned spells to run in order, like a combo that never changes. */
+  practiceChain: Spell[];
+  practiceStep: number;
+  dragging: Spell | null;
+
   /* ── surfaces the constellation UI owns ── */
   /**
     * The star you picked, which drives the detail card. Chosen by click, not by
@@ -312,6 +346,11 @@ interface State {
   setSelected(spell: Spell | null): void;
   setPage(page: Page): void;
   setPracticing(on: boolean): void;
+  /** Pin or unpin a spell from the practice chain. */
+  togglePracticeSpell(spell: Spell): void;
+  clearPracticeChain(): void;
+  /** The star currently being dragged toward the chain tray, if any. */
+  setDragging(spell: Spell | null): void;
   togglePause(): void;
   endPause(now: number): void;
   setMode(mode: ModeId): void;
@@ -454,6 +493,13 @@ export const useStore = create<State>()((set, get) => {
     shake: 0,
     flash: null,
 
+    practiceTimes: {},
+    practiceMark: 0,
+    tempo: null,
+    practiceChain: [],
+    practiceStep: 0,
+    dragging: null,
+
     selected: null,
     kbOpen: false,
     statsOpen: false,
@@ -487,7 +533,42 @@ export const useStore = create<State>()((set, get) => {
      * already in hand.
      */
     setPracticing(on) {
-      set({ practicing: on, orbs: [], slots: EMPTY_SLOTS, verdict: IDLE, selected: null });
+      set({
+        practicing: on,
+        orbs: [],
+        slots: EMPTY_SLOTS,
+        verdict: IDLE,
+        selected: null,
+        // The pace is per session: yesterday's hands are not today's.
+        practiceTimes: {},
+        practiceMark: 0,
+        tempo: null,
+        practiceChain: [],
+        practiceStep: 0,
+        dragging: null,
+      });
+    },
+
+    togglePracticeSpell(spell) {
+      const s = get();
+      const held = s.practiceChain;
+      const at = held.findIndex((x) => x.id === spell.id);
+      const chain =
+        at >= 0
+          ? held.filter((_, i) => i !== at)
+          : held.length < PRACTICE_CHAIN_MAX
+            ? [...held, spell]
+            : held;
+      if (chain === held) return;
+      set({ practiceChain: chain, practiceStep: 0, verdict: IDLE, tempo: null });
+    },
+
+    setDragging(spell) {
+      if (get().dragging?.id !== spell?.id) set({ dragging: spell });
+    },
+
+    clearPracticeChain() {
+      set({ practiceChain: [], practiceStep: 0, verdict: IDLE, tempo: null });
     },
 
     /**
@@ -750,6 +831,9 @@ export const useStore = create<State>()((set, get) => {
     castOrb(orb) {
       const s = get();
       set({
+        // Timed from the first reagent, not from the last cast: the pause
+        // between casts is thinking time, and in a sandbox that is allowed.
+        practiceMark: s.practicing && !s.practiceMark ? performance.now() : s.practiceMark,
         orbs: pushOrb(s.orbs, orb),
         presses: s.running ? s.presses + 1 : s.presses,
         chainPresses: s.running ? s.chainPresses + 1 : s.chainPresses,
@@ -784,11 +868,54 @@ export const useStore = create<State>()((set, get) => {
 
       // The sandbox is never recorded — that is the whole point of it.
       if (!s.running) {
+        const now = performance.now();
+        const ms = s.practiceMark ? now - s.practiceMark : 0;
+        const history = s.practiceTimes[spell.id] ?? [];
+
+        /* Judged against your own pace for this spell, and only once there is
+           enough of it to mean something. Two casts is not a pace. */
+        let tempo: Tempo = null;
+        if (ms > 0 && history.length >= TEMPO_MIN_SAMPLES) {
+          const mean = history.reduce((a, b) => a + b, 0) / history.length;
+          tempo = ms > mean + TEMPO_BAND_MS ? 'slow' : ms < mean - TEMPO_BAND_MS ? 'fast' : 'steady';
+        }
+
+        const chain = s.practiceChain;
+        const owed = chain.length > 0 ? chain[s.practiceStep] : null;
+
+        // A pinned chain is the one thing in the sandbox you can get wrong.
+        if (owed && owed.id !== spell.id) {
+          set({
+            presses,
+            practiceMark: 0,
+            tempo: null,
+            shake: s.shake + 1,
+            verdict: { text: `That was ${spell.name}. The chain wants ${owed.name}.`, tone: 'bad' },
+          });
+          return;
+        }
+
+        const reagents = spell.orbs.map((o) => ORB_INFO[o].name).join(' · ');
+        const pace =
+          tempo === 'fast'
+            ? ' — faster than your pace'
+            : tempo === 'slow'
+              ? ' — slower than your pace'
+              : tempo === 'steady'
+                ? ' — on your pace'
+                : '';
+
         set({
           presses,
-          celebration: { id: performance.now(), kind: 'spell', text: '', hex: spellHex(spell), spellId: spell.id },
+          practiceMark: 0,
+          tempo,
+          // Only timed casts count toward the pace; the first of a session has
+          // no mark to measure from.
+          practiceTimes: ms > 0 ? { ...s.practiceTimes, [spell.id]: [...history, ms].slice(-12) } : s.practiceTimes,
+          practiceStep: owed ? (s.practiceStep + 1) % chain.length : s.practiceStep,
+          celebration: { id: now, kind: 'spell', text: '', hex: spellHex(spell), spellId: spell.id },
           verdict: {
-            text: `${spell.name} — ${spell.orbs.map((o) => ORB_INFO[o].name).join(' · ')}`,
+            text: ms > 0 ? `${spell.name} — ${(ms / 1000).toFixed(2)}s${pace}` : `${spell.name} — ${reagents}`,
             tone: 'good',
           },
         });

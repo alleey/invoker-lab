@@ -2,7 +2,7 @@ import { pct, sec, tier } from '../engine/format';
 import { parFor } from '../engine/slots';
 import { ORB_INFO } from '../engine/spells';
 import { accuracy, attempts, averageMs, statFor, weakestSpells } from '../engine/stats';
-import { useStore, WEAK_POOL_SIZE } from '../store';
+import { PRACTICE_CHAIN_MAX, useStore, WEAK_POOL_SIZE } from '../store';
 import { Kbd } from './Kbd';
 import { Sigil } from './Sigil';
 
@@ -48,6 +48,9 @@ export function StarCard(): JSX.Element {
   const slots = useStore((s) => s.slots);
   const bindings = useStore((s) => s.bindings);
   const stats = useStore((s) => s.stats);
+  const practicing = useStore((s) => s.practicing);
+  const chain = useStore((s) => s.practiceChain);
+  const pin = useStore((s) => s.togglePracticeSpell);
 
   if (!spell || !welcome) return <aside className="card" aria-hidden="true" />;
 
@@ -74,6 +77,21 @@ export function StarCard(): JSX.Element {
         </span>
       </div>
       <p className="tag">{spell.tag}</p>
+
+      {practicing && (
+        <button
+          className={`pinbtn${chain.some((c) => c.id === spell.id) ? ' on' : ''}`}
+          type="button"
+          disabled={!chain.some((c) => c.id === spell.id) && chain.length >= PRACTICE_CHAIN_MAX}
+          onClick={() => pin(spell)}
+        >
+          {chain.some((c) => c.id === spell.id)
+            ? 'Remove from chain'
+            : chain.length >= PRACTICE_CHAIN_MAX
+              ? `Chain is full (${PRACTICE_CHAIN_MAX})`
+              : 'Add to chain'}
+        </button>
+      )}
 
       {live && (
       <div className="sec">

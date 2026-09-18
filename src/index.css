@@ -7,7 +7,10 @@
 :root{
   --ground:#070504; --brass:#b8934a; --brass-line:rgba(184,147,74,.3); --brass-faint:rgba(184,147,74,.12);
   --gold:#ffd76a; --bone:#ebe1cc; --dim:#8a8272; --dimmer:#615a4d; --blood:#ff5c6a;
-  --quas:#5ad1ff; --wex:#b476ff; --exort:#ff7d3a; color-scheme:dark;
+  --quas:#5ad1ff; --wex:#b476ff; --exort:#ff7d3a;
+  /* pace only: green is claimed by no reagent and no accuracy band */
+  --fast:#5ce08a;
+  color-scheme:dark;
 }
 html,body{height:100%}
 body{margin:0;background:var(--ground);color:var(--bone);font:12px/1.5 'IBM Plex Mono',ui-monospace,Consolas,monospace;overflow:hidden}
@@ -603,3 +606,34 @@ table.st{width:100%;border-collapse:collapse}
    handed you the first spell three seconds early — free in every mode, and
    decisive in one that ends on a single mistake. */
 .pausepage.starting .pz h2{color:var(--gold)}
+
+/* ── practice: pinned chain and pace feedback ── */
+.pinbtn{margin-top:12px;width:100%;background:none;border:1px solid var(--brass-line);color:var(--gold);
+  font-family:'Syncopate',sans-serif;font-size:11px;letter-spacing:.16em;text-transform:uppercase;padding:9px 12px}
+.pinbtn:hover:not(:disabled){border-color:var(--gold)}
+.pinbtn.on{border-color:rgba(255,215,106,.6);background:rgba(255,215,106,.1)}
+.pinbtn:disabled{opacity:.4;cursor:not-allowed;color:var(--dimmer)}
+.chain-clear{background:none;border:1px solid var(--brass-faint);color:var(--dimmer);font-size:11px;
+  padding:5px 11px;margin-left:4px;pointer-events:auto}
+.chain-clear:hover{color:var(--bone);border-color:var(--brass)}
+/* Pace is carried by the border rather than by more words: you read this
+   between casts, and a sentence is slower than a colour. */
+.practice-live{transition:border-color .2s,box-shadow .2s}
+.practice-live.t-fast{border-color:rgba(92,224,138,.75);box-shadow:0 0 26px -10px var(--fast)}
+.practice-live.t-slow{border-color:rgba(255,92,106,.7);box-shadow:0 0 26px -10px var(--blood)}
+.practice-live.t-steady{border-color:rgba(255,215,106,.5)}
+
+/* The chain tray is always present in practice, so the first star has
+   somewhere to land. */
+.chain.tray{pointer-events:auto;align-items:center;min-height:36px;padding:5px 7px;
+  border:1px dashed transparent;border-radius:4px;transition:border-color .15s,background .15s}
+.chain.tray.armed{border-color:var(--brass-line);background:rgba(184,147,74,.05)}
+.chain.tray.over{border-color:var(--gold);background:rgba(255,215,106,.1)}
+.tray-empty{margin:0;color:var(--dimmer);font-size:11px;letter-spacing:.06em;padding:3px 8px}
+.chain.tray.over .tray-empty{color:var(--gold)}
+.tray-slot{color:var(--dimmer);border-style:dashed !important;opacity:.6}
+
+/* Which build is live. Quiet enough to ignore, present enough to quote when
+   something looks wrong. Hidden with the tagline on narrow windows. */
+.title .ver{color:var(--dimmer);font-size:11px;letter-spacing:.1em;margin-top:3px}
+@media (max-width:1400px){.title .ver{display:none}}
